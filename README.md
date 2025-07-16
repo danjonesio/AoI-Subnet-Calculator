@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Art of Infra - Subnet Calculator
+
+A professional subnet calculator built with Next.js and shadcn/ui for network engineers and IT professionals.
+
+## Features
+
+- **Real-time Calculation**: Automatically calculates subnet information as you type
+- **Dual Mode Support**:
+  - **Normal Mode**: Standard subnetting calculations
+  - **AWS VPC Mode**: AWS-specific calculations with reserved IP addresses
+- **Comprehensive Results**: Shows network address, broadcast address, host ranges, subnet masks, and more
+- **AWS Reserved IPs**: In AWS mode, displays the 5 IP addresses AWS reserves in every subnet
+- **Input Validation**: Validates IP addresses and CIDR notation (AWS mode enforces /16-/28 range)
+- **Professional UI**: Clean, responsive design using shadcn/ui components
+- **Mobile Friendly**: Works seamlessly on desktop and mobile devices
+
+## What it Calculates
+
+- Network Address
+- Broadcast Address
+- First and Last Host IP
+- Subnet Mask (dotted decimal)
+- Wildcard Mask
+- Total Hosts
+- Usable Hosts
+- CIDR Notation
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Node.js 18+
+- npm or yarn
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Installation
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Clone the repository
+2. Install dependencies:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   ```bash
+   npm install
+   ```
 
-## Learn More
+3. Run the development server:
 
-To learn more about Next.js, take a look at the following resources:
+   ```bash
+   npm run dev
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+4. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Usage
 
-## Deploy on Vercel
+1. Enter an IP address (e.g., `192.168.1.0`)
+2. Enter a CIDR prefix (e.g., `24`)
+3. The calculator will automatically display all subnet information
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Examples
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Normal Mode
+
+- `192.168.1.0/24` - Standard Class C network (254 usable hosts)
+- `10.0.0.0/8` - Class A private network
+- `172.16.0.0/12` - Class B private network range
+- `192.168.1.0/28` - Smaller subnet with 14 usable hosts
+
+### AWS VPC Mode
+
+- `10.0.1.0/24` - AWS subnet with 251 usable hosts (5 reserved by AWS)
+- `172.31.0.0/20` - Default VPC subnet range
+- `10.0.0.0/28` - Small AWS subnet with 11 usable hosts
+- Shows AWS reserved IPs: .0 (network), .1 (VPC router), .2 (DNS), .3 (future use), .255 (broadcast)
+
+## Tech Stack
+
+- **Next.js 15** - React framework
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Styling
+- **shadcn/ui** - UI components
+- **React Hooks** - State management
+
+## Perfect for
+
+- Network engineers planning subnets
+- IT professionals designing networks
+- Students learning networking concepts
+- Anyone needing quick subnet calculations
+
+## License
+
+MIT License - feel free to use this for your networking projects!
