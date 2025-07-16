@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Github, Newspaper } from "lucide-react";
 
 interface SubnetInfo {
   network: string;
@@ -68,12 +69,12 @@ export default function SubnetCalculator() {
 
   const calculateSubnet = useCallback(() => {
     setError("");
-    
+
     if (!validateIP(ipAddress)) {
       setError("Invalid IP address format");
       return;
     }
-    
+
     if (!validateCIDR(cidr)) {
       if (mode === "aws") {
         setError("AWS VPC subnets require CIDR between /16 and /28 (minimum 16 IP addresses)");
@@ -87,14 +88,14 @@ export default function SubnetCalculator() {
     const hostBits = 32 - cidrNum;
     const subnetMask = (0xFFFFFFFF << hostBits) >>> 0;
     const wildcardMask = ~subnetMask >>> 0;
-    
+
     const ipInt = ipToInt(ipAddress);
     const networkInt = (ipInt & subnetMask) >>> 0;
     const broadcastInt = (networkInt | wildcardMask) >>> 0;
-    
+
     const totalHosts = Math.pow(2, hostBits);
     let usableHosts = hostBits <= 1 ? 0 : totalHosts - 2;
-    
+
     const firstHostInt = networkInt + 1;
     const lastHostInt = broadcastInt - 1;
 
@@ -137,13 +138,41 @@ export default function SubnetCalculator() {
         <div className="text-center flex-1 space-y-2">
           <h1 className="text-3xl font-bold">Art of Infra - Subnet Calculator</h1>
           <p className="text-muted-foreground">
-            Professional network planning tool for engineers and IT professionals
+            Network planning tool for engineers and IT professionals
           </p>
           <p className="text-sm text-muted-foreground">
-            From the team at <a href="https://artofinfra.com" className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">artofinfra.com</a>
+            From Dan Jones at the <a href="https://artofinfra.com" className="text-primary hover:text-primary/80 hover:underline" target="_blank" rel="noopener noreferrer">artofinfra.com</a> blog
           </p>
         </div>
-        <div className="ml-4">
+        <div className="ml-4 flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            asChild
+          >
+            <a
+              href="https://artofinfra.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Visit Art of Infra blog"
+            >
+              <Newspaper className="h-4 w-4" />
+            </a>
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            asChild
+          >
+            <a
+              href="https://github.com/danjonesio/AoI-Subnet-Calculator"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="View source on GitHub"
+            >
+              <Github className="h-4 w-4" />
+            </a>
+          </Button>
           <ThemeToggle />
         </div>
       </div>
@@ -157,7 +186,7 @@ export default function SubnetCalculator() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
+            <div className="space-y-2 flex-1">
               <Label htmlFor="ip">IP Address</Label>
               <Input
                 id="ip"
@@ -165,9 +194,10 @@ export default function SubnetCalculator() {
                 placeholder="192.168.1.0"
                 value={ipAddress}
                 onChange={(e) => setIpAddress(e.target.value)}
+                className="w-full"
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 flex-1">
               <Label htmlFor="cidr">CIDR Prefix</Label>
               <Input
                 id="cidr"
@@ -177,12 +207,13 @@ export default function SubnetCalculator() {
                 placeholder="24"
                 value={cidr}
                 onChange={(e) => setCidr(e.target.value)}
+                className="w-full"
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 flex-1">
               <Label htmlFor="mode">Mode</Label>
               <Select value={mode} onValueChange={setMode}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select mode" />
                 </SelectTrigger>
                 <SelectContent>
@@ -192,11 +223,11 @@ export default function SubnetCalculator() {
               </Select>
             </div>
           </div>
-          
+
           {error && (
             <div className="text-red-500 text-sm">{error}</div>
           )}
-          
+
           <Button onClick={calculateSubnet} className="w-full">
             Calculate Subnet
           </Button>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import Script from "next/script";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Subnet Calculator - Network Planning Tool",
-  description: "Professional subnet calculator for network engineers and IT professionals. Calculate network addresses, broadcast addresses, host ranges, and subnet masks.",
+  title: "AoI - Subnet Calculator - Network Planning Tool",
+  description: "Professional subnet calculator. Calculate network addresses, broadcast addresses, host ranges, and subnet masks for general networks, AWS and more.",
 };
 
 export default function RootLayout({
@@ -25,6 +26,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID && (
+          <Script
+            src={process.env.NEXT_PUBLIC_UMAMI_SRC}
+            data-website-id={process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID}
+            strategy="afterInteractive"
+          />
+        )}
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
