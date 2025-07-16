@@ -1,6 +1,6 @@
 # Art of Infra - Subnet Calculator
 
-A professional subnet calculator built with Next.js and shadcn/ui for network engineers and IT professionals.
+A professional subnet calculator built with Next.js and shadcn/ui for network engineers and IT professionals. Deployed on Cloudflare Pages for fast, global access.
 
 ## Features
 
@@ -48,6 +48,55 @@ A professional subnet calculator built with Next.js and shadcn/ui for network en
    ```
 
 4. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+### Building for Production
+
+To build the static export for deployment:
+
+```bash
+npm run build
+```
+
+This creates an `out` directory with static files ready for deployment.
+
+### Local Testing of Production Build
+
+To test the production build locally:
+
+```bash
+# Build the project
+npm run build
+
+# Serve the static files
+cd out
+python3 -m http.server 8000
+# or
+npx serve . -p 8000
+```
+
+Then visit [http://localhost:8000](http://localhost:8000)
+
+## Deployment
+
+This project is configured for deployment on Cloudflare Pages with static export.
+
+### Cloudflare Pages Configuration
+
+- **Build command**: `npm run build`
+- **Deploy command**: `echo "Deploy complete"`
+- **Root directory**: `/subnet-calculator`
+- **Build output directory**: `out` (automatically detected)
+
+The project uses Next.js static export (`output: 'export'`) to generate static files that work perfectly with Cloudflare Pages' edge network.
+
+### Other Static Hosting Platforms
+
+The built `out` directory can be deployed to any static hosting service:
+- Vercel
+- Netlify  
+- GitHub Pages
+- AWS S3 + CloudFront
+- Any CDN or web server
 
 ## Usage
 

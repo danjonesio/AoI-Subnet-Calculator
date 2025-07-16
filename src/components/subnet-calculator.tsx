@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,14 +44,14 @@ export default function SubnetCalculator() {
     });
   };
 
-  const validateCIDR = (cidr: string): boolean => {
+  const validateCIDR = useCallback((cidr: string): boolean => {
     const num = parseInt(cidr);
     if (mode === "aws") {
       // AWS VPC subnets must have at least 16 IP addresses (minimum /28)
       return !isNaN(num) && num >= 16 && num <= 28;
     }
     return !isNaN(num) && num >= 0 && num <= 32;
-  };
+  }, [mode]);
 
   const ipToInt = (ip: string): number => {
     return ip.split(".").reduce((acc, octet) => (acc << 8) + parseInt(octet), 0) >>> 0;
@@ -66,7 +66,7 @@ export default function SubnetCalculator() {
     ].join(".");
   };
 
-  const calculateSubnet = () => {
+  const calculateSubnet = useCallback(() => {
     setError("");
     
     if (!validateIP(ipAddress)) {
@@ -123,13 +123,13 @@ export default function SubnetCalculator() {
       cidr: `/${cidr}`,
       awsReserved
     });
-  };
+  }, [ipAddress, cidr, mode, validateCIDR]);
 
   useEffect(() => {
     if (ipAddress && cidr) {
       calculateSubnet();
     }
-  }, [ipAddress, cidr, mode]);
+  }, [ipAddress, cidr, mode, calculateSubnet]);
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
