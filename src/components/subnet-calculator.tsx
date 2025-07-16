@@ -135,7 +135,7 @@ export default function SubnetCalculator() {
     <div className="max-w-4xl mx-auto p-6 space-y-6">
       <div className="flex justify-between items-start mb-6">
         <div className="text-center flex-1 space-y-2">
-          <h1 className="text-3xl font-bold">Subnet Calculator</h1>
+          <h1 className="text-3xl font-bold">Art of Infra - Subnet Calculator</h1>
           <p className="text-muted-foreground">
             Professional network planning tool for engineers and IT professionals
           </p>
