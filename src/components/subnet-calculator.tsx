@@ -236,7 +236,7 @@ export default function SubnetCalculator() {
       <div className="text-center space-y-2 mb-6">
         <h1 className="text-3xl font-bold">Subnet Calculator</h1>
         <p className="text-muted-foreground">
-          Network planning tool for engineers and IT professionals
+          Network planning tool for general networking, AWS, Azure and Google Cloud.
         </p>
         <p className="text-sm text-muted-foreground">
           From Dan Jones at the <a href="https://artofinfra.com" className="text-primary hover:text-primary/80 hover:underline" target="_blank" rel="noopener noreferrer">artofinfra.com</a> blog

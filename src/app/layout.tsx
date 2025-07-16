@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AoI - Subnet Calculator - Network Planning Tool",
-  description: "Professional subnet calculator. Calculate network addresses, broadcast addresses, host ranges, and subnet masks for general networks, AWS and more.",
+  title: "AoI - Subnet Calculator for AWS, Azure and Google Cloud",
+  description: "The modern subnet calculator and planner. Calculate network addresses for general networks, AWS, Azure and Google Cloud",
 };
 
 export default function RootLayout({
