@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Github, Newspaper } from "lucide-react";
+import { useTheme } from "next-themes";
+import Image from "next/image";
 
 interface SubnetInfo {
   network: string;
@@ -20,12 +22,13 @@ interface SubnetInfo {
   totalHosts: number;
   usableHosts: number;
   cidr: string;
-  awsReserved?: {
-    networkAddress: string;
-    vpcRouter: string;
-    dnsServer: string;
-    futureUse: string;
-    broadcast: string;
+  cloudReserved?: {
+    provider: string;
+    reservations: Array<{
+      ip: string;
+      purpose: string;
+      description: string;
+    }>;
   };
 }
 
@@ -35,6 +38,12 @@ export default function SubnetCalculator() {
   const [mode, setMode] = useState("normal");
   const [subnetInfo, setSubnetInfo] = useState<SubnetInfo | null>(null);
   const [error, setError] = useState("");
+  const [mounted, setMounted] = useState(false);
+  const { theme } = useTheme();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const validateIP = (ip: string): boolean => {
     const parts = ip.split(".");
@@ -50,6 +59,12 @@ export default function SubnetCalculator() {
     if (mode === "aws") {
       // AWS VPC subnets must have at least 16 IP addresses (minimum /28)
       return !isNaN(num) && num >= 16 && num <= 28;
+    } else if (mode === "azure") {
+      // Azure VNet subnets must have at least 8 IP addresses (minimum /29)
+      return !isNaN(num) && num >= 8 && num <= 29;
+    } else if (mode === "gcp") {
+      // Google Cloud VPC subnets must have at least 8 IP addresses (minimum /29)
+      return !isNaN(num) && num >= 8 && num <= 29;
     }
     return !isNaN(num) && num >= 0 && num <= 32;
   }, [mode]);
@@ -78,6 +93,10 @@ export default function SubnetCalculator() {
     if (!validateCIDR(cidr)) {
       if (mode === "aws") {
         setError("AWS VPC subnets require CIDR between /16 and /28 (minimum 16 IP addresses)");
+      } else if (mode === "azure") {
+        setError("Azure VNet subnets require CIDR between /8 and /29 (minimum 8 IP addresses)");
+      } else if (mode === "gcp") {
+        setError("Google Cloud VPC subnets require CIDR between /8 and /29 (minimum 8 IP addresses)");
       } else {
         setError("CIDR must be between 0 and 32");
       }
@@ -99,30 +118,63 @@ export default function SubnetCalculator() {
     const firstHostInt = networkInt + 1;
     const lastHostInt = broadcastInt - 1;
 
-    let awsReserved = undefined;
+    let cloudReserved = undefined;
+    let firstUsableHost = intToIp(firstHostInt);
+
     if (mode === "aws") {
       // AWS reserves the first 4 IPs and the last IP in each subnet
       usableHosts = totalHosts - 5; // Network + 3 AWS reserved + Broadcast
-      awsReserved = {
-        networkAddress: intToIp(networkInt), // .0 - Network address
-        vpcRouter: intToIp(networkInt + 1), // .1 - VPC router
-        dnsServer: intToIp(networkInt + 2), // .2 - DNS server
-        futureUse: intToIp(networkInt + 3), // .3 - Reserved for future use
-        broadcast: intToIp(broadcastInt) // Last IP - Broadcast address
+      firstUsableHost = intToIp(networkInt + 4);
+      cloudReserved = {
+        provider: "AWS",
+        reservations: [
+          { ip: intToIp(networkInt), purpose: "Network Address", description: "Network identifier (not assignable)" },
+          { ip: intToIp(networkInt + 1), purpose: "VPC Router", description: "Reserved for the VPC router" },
+          { ip: intToIp(networkInt + 2), purpose: "DNS Server", description: "Reserved for DNS server" },
+          { ip: intToIp(networkInt + 3), purpose: "Future Use", description: "Reserved for future use" },
+          { ip: intToIp(broadcastInt), purpose: "Broadcast Address", description: "Network broadcast address (not assignable)" }
+        ]
+      };
+    } else if (mode === "azure") {
+      // Azure reserves the first 4 IPs and the last IP in each subnet
+      usableHosts = totalHosts - 5; // Network + 3 Azure reserved + Broadcast
+      firstUsableHost = intToIp(networkInt + 4);
+      cloudReserved = {
+        provider: "Azure",
+        reservations: [
+          { ip: intToIp(networkInt), purpose: "Network Address", description: "Network identifier (not assignable)" },
+          { ip: intToIp(networkInt + 1), purpose: "Default Gateway", description: "Reserved for default gateway" },
+          { ip: intToIp(networkInt + 2), purpose: "DNS Mapping", description: "Reserved for Azure DNS" },
+          { ip: intToIp(networkInt + 3), purpose: "DNS Mapping", description: "Reserved for Azure DNS" },
+          { ip: intToIp(broadcastInt), purpose: "Broadcast Address", description: "Network broadcast address (not assignable)" }
+        ]
+      };
+    } else if (mode === "gcp") {
+      // Google Cloud reserves the first 2 IPs and the last 2 IPs in each subnet
+      usableHosts = totalHosts - 4; // Network + 1 GCP reserved + 2 broadcast reserved
+      firstUsableHost = intToIp(networkInt + 2);
+      cloudReserved = {
+        provider: "Google Cloud",
+        reservations: [
+          { ip: intToIp(networkInt), purpose: "Network Address", description: "Network identifier (not assignable)" },
+          { ip: intToIp(networkInt + 1), purpose: "Default Gateway", description: "Reserved for default gateway" },
+          { ip: intToIp(broadcastInt - 1), purpose: "Second-to-last IP", description: "Reserved by Google Cloud" },
+          { ip: intToIp(broadcastInt), purpose: "Broadcast Address", description: "Network broadcast address (not assignable)" }
+        ]
       };
     }
 
     setSubnetInfo({
       network: intToIp(networkInt),
       broadcast: intToIp(broadcastInt),
-      firstHost: hostBits <= 1 ? "N/A" : mode === "aws" ? intToIp(networkInt + 4) : intToIp(firstHostInt),
+      firstHost: hostBits <= 1 ? "N/A" : firstUsableHost,
       lastHost: hostBits <= 1 ? "N/A" : intToIp(lastHostInt),
       subnetMask: intToIp(subnetMask),
       wildcardMask: intToIp(wildcardMask),
       totalHosts,
       usableHosts: Math.max(0, usableHosts),
       cidr: `/${cidr}`,
-      awsReserved
+      cloudReserved
     });
   }, [ipAddress, cidr, mode, validateCIDR]);
 
@@ -134,17 +186,20 @@ export default function SubnetCalculator() {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-start mb-6">
-        <div className="text-center flex-1 space-y-2">
-          <h1 className="text-3xl font-bold">Art of Infra - Subnet Calculator</h1>
-          <p className="text-muted-foreground">
-            Network planning tool for engineers and IT professionals
-          </p>
-          <p className="text-sm text-muted-foreground">
-            From Dan Jones at the <a href="https://artofinfra.com" className="text-primary hover:text-primary/80 hover:underline" target="_blank" rel="noopener noreferrer">artofinfra.com</a> blog
-          </p>
+      {/* Top navigation bar with logo and buttons */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center">
+          {mounted && (
+            <Image
+              src={theme === 'dark' ? '/aio_logo_dark.png' : '/aio_logo_light.png'}
+              alt="Art of Infra Logo"
+              width={120}
+              height={40}
+              className="h-10 w-auto"
+            />
+          )}
         </div>
-        <div className="ml-4 flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="icon"
@@ -177,6 +232,17 @@ export default function SubnetCalculator() {
         </div>
       </div>
 
+      {/* Main header section */}
+      <div className="text-center space-y-2 mb-6">
+        <h1 className="text-3xl font-bold">Subnet Calculator</h1>
+        <p className="text-muted-foreground">
+          Network planning tool for engineers and IT professionals
+        </p>
+        <p className="text-sm text-muted-foreground">
+          From Dan Jones at the <a href="https://artofinfra.com" className="text-primary hover:text-primary/80 hover:underline" target="_blank" rel="noopener noreferrer">artofinfra.com</a> blog
+        </p>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Network Input</CardTitle>
@@ -203,7 +269,7 @@ export default function SubnetCalculator() {
                 id="cidr"
                 type="number"
                 min="0"
-                max={mode === "aws" ? "28" : "32"}
+                max={mode === "aws" ? "28" : (mode === "azure" || mode === "gcp") ? "29" : "32"}
                 placeholder="24"
                 value={cidr}
                 onChange={(e) => setCidr(e.target.value)}
@@ -219,6 +285,8 @@ export default function SubnetCalculator() {
                 <SelectContent>
                   <SelectItem value="normal">Normal Subnetting</SelectItem>
                   <SelectItem value="aws">AWS VPC Mode</SelectItem>
+                  <SelectItem value="azure">Azure VNet Mode</SelectItem>
+                  <SelectItem value="gcp">Google Cloud VPC Mode</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -240,7 +308,7 @@ export default function SubnetCalculator() {
             <CardHeader>
               <CardTitle>Subnet Information</CardTitle>
               <CardDescription>
-                Calculated network details for {ipAddress}/{cidr} {mode === "aws" && "(AWS VPC Mode)"}
+                Calculated network details for {ipAddress}/{cidr} {mode === "aws" && "(AWS VPC Mode)"}{mode === "azure" && "(Azure VNet Mode)"}{mode === "gcp" && "(Google Cloud VPC Mode)"}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -293,12 +361,12 @@ export default function SubnetCalculator() {
             </CardContent>
           </Card>
 
-          {mode === "aws" && subnetInfo.awsReserved && (
+          {subnetInfo.cloudReserved && (
             <Card>
               <CardHeader>
-                <CardTitle>AWS Reserved IP Addresses</CardTitle>
+                <CardTitle>{subnetInfo.cloudReserved.provider} Reserved IP Addresses</CardTitle>
                 <CardDescription>
-                  AWS automatically reserves these IP addresses in every VPC subnet
+                  {subnetInfo.cloudReserved.provider} automatically reserves these IP addresses in every subnet
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -311,31 +379,13 @@ export default function SubnetCalculator() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    <TableRow>
-                      <TableCell className="font-mono">{subnetInfo.awsReserved.networkAddress}</TableCell>
-                      <TableCell className="font-medium">Network Address</TableCell>
-                      <TableCell>Network identifier (not assignable)</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-mono">{subnetInfo.awsReserved.vpcRouter}</TableCell>
-                      <TableCell className="font-medium">VPC Router</TableCell>
-                      <TableCell>Reserved for the VPC router</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-mono">{subnetInfo.awsReserved.dnsServer}</TableCell>
-                      <TableCell className="font-medium">DNS Server</TableCell>
-                      <TableCell>Reserved for DNS server</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-mono">{subnetInfo.awsReserved.futureUse}</TableCell>
-                      <TableCell className="font-medium">Future Use</TableCell>
-                      <TableCell>Reserved for future use</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-mono">{subnetInfo.awsReserved.broadcast}</TableCell>
-                      <TableCell className="font-medium">Broadcast Address</TableCell>
-                      <TableCell>Network broadcast address (not assignable)</TableCell>
-                    </TableRow>
+                    {subnetInfo.cloudReserved.reservations.map((reservation, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-mono">{reservation.ip}</TableCell>
+                        <TableCell className="font-medium">{reservation.purpose}</TableCell>
+                        <TableCell>{reservation.description}</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </CardContent>
