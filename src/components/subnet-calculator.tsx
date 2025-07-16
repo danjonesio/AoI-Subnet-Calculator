@@ -12,6 +12,15 @@ import { Github, Newspaper } from "lucide-react";
 import { useTheme } from "next-themes";
 import Image from "next/image";
 
+// Types
+type CloudMode = "normal" | "aws" | "azure" | "gcp";
+
+interface CloudReservation {
+  ip: string;
+  purpose: string;
+  description: string;
+}
+
 interface SubnetInfo {
   network: string;
   broadcast: string;
@@ -24,13 +33,63 @@ interface SubnetInfo {
   cidr: string;
   cloudReserved?: {
     provider: string;
-    reservations: Array<{
-      ip: string;
-      purpose: string;
-      description: string;
-    }>;
+    reservations: CloudReservation[];
   };
 }
+
+interface CloudProviderConfig {
+  name: string;
+  minCidr: number;
+  maxCidr: number;
+  reservedCount: number;
+  firstUsableOffset: number;
+  getReservations: (networkInt: number, broadcastInt: number, intToIp: (int: number) => string) => CloudReservation[];
+}
+
+// Cloud provider configurations
+const CLOUD_PROVIDERS: Record<Exclude<CloudMode, "normal">, CloudProviderConfig> = {
+  aws: {
+    name: "AWS",
+    minCidr: 16,
+    maxCidr: 28,
+    reservedCount: 5,
+    firstUsableOffset: 4,
+    getReservations: (networkInt, broadcastInt, intToIp) => [
+      { ip: intToIp(networkInt), purpose: "Network Address", description: "Network identifier (not assignable)" },
+      { ip: intToIp(networkInt + 1), purpose: "VPC Router", description: "Reserved for the VPC router" },
+      { ip: intToIp(networkInt + 2), purpose: "DNS Server", description: "Reserved for DNS server" },
+      { ip: intToIp(networkInt + 3), purpose: "Future Use", description: "Reserved for future use" },
+      { ip: intToIp(broadcastInt), purpose: "Broadcast Address", description: "Network broadcast address (not assignable)" }
+    ]
+  },
+  azure: {
+    name: "Azure",
+    minCidr: 8,
+    maxCidr: 29,
+    reservedCount: 5,
+    firstUsableOffset: 4,
+    getReservations: (networkInt, broadcastInt, intToIp) => [
+      { ip: intToIp(networkInt), purpose: "Network Address", description: "Network identifier (not assignable)" },
+      { ip: intToIp(networkInt + 1), purpose: "Default Gateway", description: "Reserved for default gateway" },
+      { ip: intToIp(networkInt + 2), purpose: "DNS Mapping", description: "Reserved for Azure DNS" },
+      { ip: intToIp(networkInt + 3), purpose: "DNS Mapping", description: "Reserved for Azure DNS" },
+      { ip: intToIp(broadcastInt), purpose: "Broadcast Address", description: "Network broadcast address (not assignable)" }
+    ]
+  },
+  gcp: {
+    name: "Google Cloud",
+    minCidr: 8,
+    maxCidr: 29,
+    reservedCount: 4,
+    firstUsableOffset: 2,
+    getReservations: (networkInt, broadcastInt, intToIp) => [
+      { ip: intToIp(networkInt), purpose: "Network Address", description: "Network identifier (not assignable)" },
+      { ip: intToIp(networkInt + 1), purpose: "Default Gateway", description: "Reserved for default gateway" },
+      { ip: intToIp(broadcastInt - 1), purpose: "Second-to-last IP", description: "Reserved by Google Cloud" },
+      { ip: intToIp(broadcastInt), purpose: "Broadcast Address", description: "Network broadcast address (not assignable)" }
+    ]
+  }
+};
 
 export default function SubnetCalculator() {
   const [ipAddress, setIpAddress] = useState("192.168.1.0");
@@ -56,17 +115,14 @@ export default function SubnetCalculator() {
 
   const validateCIDR = useCallback((cidr: string): boolean => {
     const num = parseInt(cidr);
-    if (mode === "aws") {
-      // AWS VPC subnets must have at least 16 IP addresses (minimum /28)
-      return !isNaN(num) && num >= 16 && num <= 28;
-    } else if (mode === "azure") {
-      // Azure VNet subnets must have at least 8 IP addresses (minimum /29)
-      return !isNaN(num) && num >= 8 && num <= 29;
-    } else if (mode === "gcp") {
-      // Google Cloud VPC subnets must have at least 8 IP addresses (minimum /29)
-      return !isNaN(num) && num >= 8 && num <= 29;
+    if (isNaN(num)) return false;
+
+    if (mode === "normal") {
+      return num >= 0 && num <= 32;
     }
-    return !isNaN(num) && num >= 0 && num <= 32;
+
+    const provider = CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS];
+    return provider ? num >= provider.minCidr && num <= provider.maxCidr : false;
   }, [mode]);
 
   const ipToInt = (ip: string): number => {
@@ -91,14 +147,14 @@ export default function SubnetCalculator() {
     }
 
     if (!validateCIDR(cidr)) {
-      if (mode === "aws") {
-        setError("AWS VPC subnets require CIDR between /16 and /28 (minimum 16 IP addresses)");
-      } else if (mode === "azure") {
-        setError("Azure VNet subnets require CIDR between /8 and /29 (minimum 8 IP addresses)");
-      } else if (mode === "gcp") {
-        setError("Google Cloud VPC subnets require CIDR between /8 and /29 (minimum 8 IP addresses)");
-      } else {
+      if (mode === "normal") {
         setError("CIDR must be between 0 and 32");
+      } else {
+        const provider = CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS];
+        if (provider) {
+          const minHosts = Math.pow(2, 32 - provider.maxCidr);
+          setError(`${provider.name} subnets require CIDR between /${provider.minCidr} and /${provider.maxCidr} (minimum ${minHosts} IP addresses)`);
+        }
       }
       return;
     }
@@ -121,47 +177,17 @@ export default function SubnetCalculator() {
     let cloudReserved = undefined;
     let firstUsableHost = intToIp(firstHostInt);
 
-    if (mode === "aws") {
-      // AWS reserves the first 4 IPs and the last IP in each subnet
-      usableHosts = totalHosts - 5; // Network + 3 AWS reserved + Broadcast
-      firstUsableHost = intToIp(networkInt + 4);
-      cloudReserved = {
-        provider: "AWS",
-        reservations: [
-          { ip: intToIp(networkInt), purpose: "Network Address", description: "Network identifier (not assignable)" },
-          { ip: intToIp(networkInt + 1), purpose: "VPC Router", description: "Reserved for the VPC router" },
-          { ip: intToIp(networkInt + 2), purpose: "DNS Server", description: "Reserved for DNS server" },
-          { ip: intToIp(networkInt + 3), purpose: "Future Use", description: "Reserved for future use" },
-          { ip: intToIp(broadcastInt), purpose: "Broadcast Address", description: "Network broadcast address (not assignable)" }
-        ]
-      };
-    } else if (mode === "azure") {
-      // Azure reserves the first 4 IPs and the last IP in each subnet
-      usableHosts = totalHosts - 5; // Network + 3 Azure reserved + Broadcast
-      firstUsableHost = intToIp(networkInt + 4);
-      cloudReserved = {
-        provider: "Azure",
-        reservations: [
-          { ip: intToIp(networkInt), purpose: "Network Address", description: "Network identifier (not assignable)" },
-          { ip: intToIp(networkInt + 1), purpose: "Default Gateway", description: "Reserved for default gateway" },
-          { ip: intToIp(networkInt + 2), purpose: "DNS Mapping", description: "Reserved for Azure DNS" },
-          { ip: intToIp(networkInt + 3), purpose: "DNS Mapping", description: "Reserved for Azure DNS" },
-          { ip: intToIp(broadcastInt), purpose: "Broadcast Address", description: "Network broadcast address (not assignable)" }
-        ]
-      };
-    } else if (mode === "gcp") {
-      // Google Cloud reserves the first 2 IPs and the last 2 IPs in each subnet
-      usableHosts = totalHosts - 4; // Network + 1 GCP reserved + 2 broadcast reserved
-      firstUsableHost = intToIp(networkInt + 2);
-      cloudReserved = {
-        provider: "Google Cloud",
-        reservations: [
-          { ip: intToIp(networkInt), purpose: "Network Address", description: "Network identifier (not assignable)" },
-          { ip: intToIp(networkInt + 1), purpose: "Default Gateway", description: "Reserved for default gateway" },
-          { ip: intToIp(broadcastInt - 1), purpose: "Second-to-last IP", description: "Reserved by Google Cloud" },
-          { ip: intToIp(broadcastInt), purpose: "Broadcast Address", description: "Network broadcast address (not assignable)" }
-        ]
-      };
+    // Apply cloud provider specific reservations
+    if (mode !== "normal") {
+      const provider = CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS];
+      if (provider) {
+        usableHosts = totalHosts - provider.reservedCount;
+        firstUsableHost = intToIp(networkInt + provider.firstUsableOffset);
+        cloudReserved = {
+          provider: provider.name,
+          reservations: provider.getReservations(networkInt, broadcastInt, intToIp)
+        };
+      }
     }
 
     setSubnetInfo({
@@ -269,7 +295,7 @@ export default function SubnetCalculator() {
                 id="cidr"
                 type="number"
                 min="0"
-                max={mode === "aws" ? "28" : (mode === "azure" || mode === "gcp") ? "29" : "32"}
+                max={mode === "normal" ? "32" : CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS]?.maxCidr || "32"}
                 placeholder="24"
                 value={cidr}
                 onChange={(e) => setCidr(e.target.value)}
@@ -308,7 +334,7 @@ export default function SubnetCalculator() {
             <CardHeader>
               <CardTitle>Subnet Information</CardTitle>
               <CardDescription>
-                Calculated network details for {ipAddress}/{cidr} {mode === "aws" && "(AWS VPC Mode)"}{mode === "azure" && "(Azure VNet Mode)"}{mode === "gcp" && "(Google Cloud VPC Mode)"}
+                Calculated network details for {ipAddress}/{cidr} {mode !== "normal" && `(${CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS]?.name} Mode)`}
               </CardDescription>
             </CardHeader>
             <CardContent>
