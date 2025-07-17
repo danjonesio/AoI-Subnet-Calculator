@@ -78,14 +78,13 @@ Then visit [http://localhost:8000](http://localhost:8000)
 
 ## Deployment
 
-This project is configured for deployment on Cloudflare Pages with static export.
+The live project is configured for deployment on Cloudflare Pages with static export.
 
 ### Cloudflare Pages Configuration
 
 - **Build command**: `npm run build`
-- **Deploy command**: `echo "Deploy complete"`
-- **Root directory**: `/subnet-calculator`
-- **Build output directory**: `out` (automatically detected)
+- **Build outpout**: `out`
+- **Root directory**: `/`
 
 The project uses Next.js static export (`output: 'export'`) to generate static files that work perfectly with Cloudflare Pages' edge network.
 
