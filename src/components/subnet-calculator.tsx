@@ -139,69 +139,255 @@ export default function SubnetCalculator() {
   };
 
   const calculateSubnet = useCallback(() => {
-    setError("");
+    try {
+      setError("");
 
-    if (!validateIP(ipAddress)) {
-      setError("Invalid IP address format");
-      return;
-    }
+      // Input validation with enhanced error handling
+      if (!ipAddress || typeof ipAddress !== 'string') {
+        setError("IP address is required");
+        return;
+      }
 
-    if (!validateCIDR(cidr)) {
-      if (mode === "normal") {
-        setError("CIDR must be between 0 and 32");
-      } else {
+      if (!cidr || typeof cidr !== 'string') {
+        setError("CIDR prefix is required");
+        return;
+      }
+
+      // Enhanced IP validation with specific error messages
+      if (!validateIP(ipAddress)) {
+        const parts = ipAddress.split(".");
+        if (parts.length !== 4) {
+          setError("IP address must have exactly 4 octets separated by dots");
+        } else if (parts.some(part => part === "" || isNaN(parseInt(part)))) {
+          setError("All IP address octets must be valid numbers");
+        } else if (parts.some(part => parseInt(part) < 0 || parseInt(part) > 255)) {
+          setError("IP address octets must be between 0 and 255");
+        } else {
+          setError("Invalid IP address format");
+        }
+        return;
+      }
+
+      if (!validateCIDR(cidr)) {
+        if (mode === "normal") {
+          setError("CIDR must be between 0 and 32");
+        } else {
+          const provider = CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS];
+          if (provider) {
+            const minHosts = Math.pow(2, 32 - provider.maxCidr);
+            setError(`${provider.name} subnets require CIDR between /${provider.minCidr} and /${provider.maxCidr} (minimum ${minHosts} IP addresses)`);
+          }
+        }
+        return;
+      }
+
+      const cidrNum = parseInt(cidr);
+      
+      // Enhanced CIDR validation with edge case handling
+      if (isNaN(cidrNum) || cidrNum < 0 || cidrNum > 32) {
+        setError("CIDR prefix must be a number between 0 and 32");
+        return;
+      }
+
+      const hostBits = 32 - cidrNum;
+      
+      // Handle edge case for /0 subnet (entire IPv4 space) - should be allowed in normal mode
+      if (hostBits >= 32) {
+        setError("Invalid subnet calculation: host bits exceed 32");
+        return;
+      }
+
+      // Enhanced bitwise operations with overflow protection
+      let subnetMask: number;
+      let wildcardMask: number;
+      
+      try {
+        subnetMask = hostBits >= 32 ? 0 : (0xFFFFFFFF << hostBits) >>> 0;
+        wildcardMask = ~subnetMask >>> 0;
+        
+        // Validate mask calculations
+        if (isNaN(subnetMask) || isNaN(wildcardMask)) {
+          throw new Error("Invalid subnet mask calculation");
+        }
+      } catch (maskError) {
+        console.error("Subnet mask calculation error:", maskError);
+        setError("Error calculating subnet mask. Please verify your CIDR input.");
+        return;
+      }
+
+      let ipInt: number;
+      try {
+        ipInt = ipToInt(ipAddress);
+        
+        // Enhanced IP conversion validation
+        if (isNaN(ipInt) || ipInt < 0 || ipInt > 0xFFFFFFFF) {
+          throw new Error("IP address conversion out of bounds");
+        }
+      } catch (ipError) {
+        console.error("IP conversion error:", ipError);
+        setError("Error converting IP address. Please check the format.");
+        return;
+      }
+
+      let networkInt: number;
+      let broadcastInt: number;
+      
+      try {
+        networkInt = (ipInt & subnetMask) >>> 0;
+        broadcastInt = (networkInt | wildcardMask) >>> 0;
+
+        // Enhanced network calculation validation
+        if (networkInt > broadcastInt) {
+          throw new Error("Network address exceeds broadcast address");
+        }
+        
+        if (isNaN(networkInt) || isNaN(broadcastInt)) {
+          throw new Error("Invalid network address calculation");
+        }
+      } catch (networkError) {
+        console.error("Network calculation error:", networkError);
+        setError("Error calculating network addresses. Please verify your inputs.");
+        return;
+      }
+
+      // Enhanced host calculation with overflow protection
+      let totalHosts: number;
+      let usableHosts: number;
+      
+      try {
+        // Handle very large subnets more safely
+        if (hostBits >= 31) {
+          totalHosts = Math.pow(2, 31); // Cap at 2^31 to prevent overflow
+        } else {
+          totalHosts = Math.pow(2, hostBits);
+        }
+        
+        // Validate total hosts calculation
+        if (isNaN(totalHosts) || totalHosts < 0 || !isFinite(totalHosts)) {
+          throw new Error("Invalid total hosts calculation");
+        }
+        
+        // Calculate usable hosts with edge case handling
+        if (hostBits <= 1) {
+          usableHosts = 0; // /31 and /32 subnets have no usable hosts in traditional subnetting
+        } else {
+          usableHosts = Math.max(0, totalHosts - 2);
+        }
+        
+      } catch (hostError) {
+        console.error("Host calculation error:", hostError);
+        setError("Error calculating host addresses. The subnet may be too large.");
+        return;
+      }
+
+      const firstHostInt = networkInt + 1;
+      const lastHostInt = broadcastInt - 1;
+
+      let cloudReserved = undefined;
+      let firstUsableHost: string;
+      
+      try {
+        firstUsableHost = intToIp(firstHostInt);
+      } catch (hostConversionError) {
+        console.error("Host IP conversion error:", hostConversionError);
+        setError("Error converting host IP addresses.");
+        return;
+      }
+
+      // Enhanced cloud provider handling with comprehensive error checking
+      if (mode !== "normal") {
         const provider = CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS];
         if (provider) {
-          const minHosts = Math.pow(2, 32 - provider.maxCidr);
-          setError(`${provider.name} subnets require CIDR between /${provider.minCidr} and /${provider.maxCidr} (minimum ${minHosts} IP addresses)`);
+          try {
+            // Validate that subnet is large enough for cloud provider requirements
+            if (totalHosts < provider.reservedCount) {
+              setError(`${provider.name} requires at least ${provider.reservedCount} IP addresses in the subnet (current: ${totalHosts})`);
+              return;
+            }
+
+            usableHosts = Math.max(0, totalHosts - provider.reservedCount);
+            
+            // Enhanced validation for first usable offset
+            const firstUsableOffset = networkInt + provider.firstUsableOffset;
+            if (firstUsableOffset > broadcastInt || firstUsableOffset < networkInt) {
+              setError(`${provider.name} subnet configuration error: insufficient IP addresses for required reservations`);
+              return;
+            }
+
+            firstUsableHost = intToIp(firstUsableOffset);
+            
+            // Enhanced cloud reservation generation with error handling
+            try {
+              const reservations = provider.getReservations(networkInt, broadcastInt, intToIp);
+              
+              // Validate reservations
+              if (!Array.isArray(reservations) || reservations.length === 0) {
+                throw new Error("Invalid reservations generated");
+              }
+              
+              // Validate each reservation
+              reservations.forEach((reservation, index) => {
+                if (!reservation.ip || !reservation.purpose || !reservation.description) {
+                  throw new Error(`Invalid reservation at index ${index}`);
+                }
+              });
+              
+              cloudReserved = {
+                provider: provider.name,
+                reservations
+              };
+            } catch (reservationError) {
+              console.error("Error generating cloud reservations:", reservationError);
+              setError(`Error calculating ${provider.name} reserved IP addresses: ${reservationError instanceof Error ? reservationError.message : 'Unknown error'}`);
+              return;
+            }
+          } catch (providerError) {
+            console.error("Cloud provider calculation error:", providerError);
+            setError(`Error processing ${provider.name} subnet requirements: ${providerError instanceof Error ? providerError.message : 'Unknown error'}`);
+            return;
+          }
         }
       }
-      return;
-    }
 
-    const cidrNum = parseInt(cidr);
-    const hostBits = 32 - cidrNum;
-    const subnetMask = (0xFFFFFFFF << hostBits) >>> 0;
-    const wildcardMask = ~subnetMask >>> 0;
-
-    const ipInt = ipToInt(ipAddress);
-    const networkInt = (ipInt & subnetMask) >>> 0;
-    const broadcastInt = (networkInt | wildcardMask) >>> 0;
-
-    const totalHosts = Math.pow(2, hostBits);
-    let usableHosts = hostBits <= 1 ? 0 : totalHosts - 2;
-
-    const firstHostInt = networkInt + 1;
-    const lastHostInt = broadcastInt - 1;
-
-    let cloudReserved = undefined;
-    let firstUsableHost = intToIp(firstHostInt);
-
-    // Apply cloud provider specific reservations
-    if (mode !== "normal") {
-      const provider = CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS];
-      if (provider) {
-        usableHosts = totalHosts - provider.reservedCount;
-        firstUsableHost = intToIp(networkInt + provider.firstUsableOffset);
-        cloudReserved = {
-          provider: provider.name,
-          reservations: provider.getReservations(networkInt, broadcastInt, intToIp)
-        };
+      // Final comprehensive validation of all calculated values
+      try {
+        const networkAddress = intToIp(networkInt);
+        const broadcastAddress = intToIp(broadcastInt);
+        const subnetMaskAddress = intToIp(subnetMask);
+        const wildcardMaskAddress = intToIp(wildcardMask);
+        const lastHostAddress = hostBits <= 1 ? "N/A" : intToIp(lastHostInt);
+        
+        // Validate all IP conversions succeeded
+        if (!networkAddress || !broadcastAddress || !subnetMaskAddress || !wildcardMaskAddress) {
+          throw new Error("Failed to convert calculated addresses to IP format");
+        }
+        
+        setSubnetInfo({
+          network: networkAddress,
+          broadcast: broadcastAddress,
+          firstHost: hostBits <= 1 ? "N/A" : firstUsableHost,
+          lastHost: lastHostAddress,
+          subnetMask: subnetMaskAddress,
+          wildcardMask: wildcardMaskAddress,
+          totalHosts: Math.floor(Math.min(totalHosts, Number.MAX_SAFE_INTEGER)), // Ensure safe integer
+          usableHosts: Math.floor(Math.min(usableHosts, Number.MAX_SAFE_INTEGER)), // Ensure safe integer
+          cidr: `/${cidr}`,
+          cloudReserved
+        });
+        
+      } catch (finalError) {
+        console.error("Final validation error:", finalError);
+        setError(`Error finalizing subnet calculation: ${finalError instanceof Error ? finalError.message : 'Unknown error'}`);
+        setSubnetInfo(null);
+        return;
       }
-    }
 
-    setSubnetInfo({
-      network: intToIp(networkInt),
-      broadcast: intToIp(broadcastInt),
-      firstHost: hostBits <= 1 ? "N/A" : firstUsableHost,
-      lastHost: hostBits <= 1 ? "N/A" : intToIp(lastHostInt),
-      subnetMask: intToIp(subnetMask),
-      wildcardMask: intToIp(wildcardMask),
-      totalHosts,
-      usableHosts: Math.max(0, usableHosts),
-      cidr: `/${cidr}`,
-      cloudReserved
-    });
+    } catch (error) {
+      console.error("Unexpected subnet calculation error:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      setError(`An unexpected error occurred during subnet calculation: ${errorMessage}. Please check your inputs and try again.`);
+      setSubnetInfo(null);
+    }
   }, [ipAddress, cidr, mode, validateCIDR]);
 
   useEffect(() => {
