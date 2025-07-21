@@ -11,9 +11,11 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Github, Newspaper } from "lucide-react";
 import { useTheme } from "next-themes";
 import Image from "next/image";
+import { validateIPv6, compressIPv6, validateIPv6CIDR, calculateIPv6Subnet, getIPv6SubnetSummary } from "@/lib/utils";
 
 // Types
 type CloudMode = "normal" | "aws" | "azure" | "gcp";
+type IPVersion = "ipv4" | "ipv6";
 
 interface CloudReservation {
   ip: string;
@@ -34,6 +36,12 @@ interface SubnetInfo {
   cloudReserved?: {
     provider: string;
     reservations: CloudReservation[];
+  };
+  ipv6Info?: {
+    addressType: string;
+    hostBits: number;
+    totalAddressesFormatted: string;
+    usableAddressesFormatted: string;
   };
 }
 
@@ -95,6 +103,7 @@ export default function SubnetCalculator() {
   const [ipAddress, setIpAddress] = useState("192.168.1.0");
   const [cidr, setCidr] = useState("24");
   const [mode, setMode] = useState("normal");
+  const [ipVersion, setIpVersion] = useState<IPVersion>("ipv4");
   const [subnetInfo, setSubnetInfo] = useState<SubnetInfo | null>(null);
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
@@ -104,18 +113,26 @@ export default function SubnetCalculator() {
     setMounted(true);
   }, []);
 
-  const validateIP = (ip: string): boolean => {
-    const parts = ip.split(".");
-    if (parts.length !== 4) return false;
-    return parts.every(part => {
-      const num = parseInt(part);
-      return !isNaN(num) && num >= 0 && num <= 255;
-    });
-  };
+  const validateIP = useCallback((ip: string): boolean => {
+    if (ipVersion === "ipv4") {
+      const parts = ip.split(".");
+      if (parts.length !== 4) return false;
+      return parts.every(part => {
+        const num = parseInt(part);
+        return !isNaN(num) && num >= 0 && num <= 255;
+      });
+    } else {
+      return validateIPv6(ip);
+    }
+  }, [ipVersion]);
 
   const validateCIDR = useCallback((cidr: string): boolean => {
     const num = parseInt(cidr);
     if (isNaN(num)) return false;
+
+    if (ipVersion === "ipv6") {
+      return validateIPv6CIDR(cidr);
+    }
 
     if (mode === "normal") {
       return num >= 0 && num <= 32;
@@ -123,7 +140,7 @@ export default function SubnetCalculator() {
 
     const provider = CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS];
     return provider ? num >= provider.minCidr && num <= provider.maxCidr : false;
-  }, [mode]);
+  }, [mode, ipVersion]);
 
   const ipToInt = (ip: string): number => {
     return ip.split(".").reduce((acc, octet) => (acc << 8) + parseInt(octet), 0) >>> 0;
@@ -155,21 +172,27 @@ export default function SubnetCalculator() {
 
       // Enhanced IP validation with specific error messages
       if (!validateIP(ipAddress)) {
-        const parts = ipAddress.split(".");
-        if (parts.length !== 4) {
-          setError("IP address must have exactly 4 octets separated by dots");
-        } else if (parts.some(part => part === "" || isNaN(parseInt(part)))) {
-          setError("All IP address octets must be valid numbers");
-        } else if (parts.some(part => parseInt(part) < 0 || parseInt(part) > 255)) {
-          setError("IP address octets must be between 0 and 255");
+        if (ipVersion === "ipv4") {
+          const parts = ipAddress.split(".");
+          if (parts.length !== 4) {
+            setError("IP address must have exactly 4 octets separated by dots");
+          } else if (parts.some(part => part === "" || isNaN(parseInt(part)))) {
+            setError("All IP address octets must be valid numbers");
+          } else if (parts.some(part => parseInt(part) < 0 || parseInt(part) > 255)) {
+            setError("IP address octets must be between 0 and 255");
+          } else {
+            setError("Invalid IP address format");
+          }
         } else {
-          setError("Invalid IP address format");
+          setError("Invalid IPv6 address format");
         }
         return;
       }
 
       if (!validateCIDR(cidr)) {
-        if (mode === "normal") {
+        if (ipVersion === "ipv6") {
+          setError("IPv6 CIDR must be between 0 and 128");
+        } else if (mode === "normal") {
           setError("CIDR must be between 0 and 32");
         } else {
           const provider = CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS];
@@ -181,8 +204,40 @@ export default function SubnetCalculator() {
         return;
       }
 
+      // Handle IPv6 calculations
+      if (ipVersion === "ipv6") {
+        const cidrNum = parseInt(cidr);
+        const ipv6Subnet = calculateIPv6Subnet(ipAddress, cidrNum);
+        const ipv6Summary = getIPv6SubnetSummary(ipAddress, cidrNum);
+
+        // Ensure IPv6 addresses are properly compressed for display
+        const compressedNetwork = compressIPv6(ipv6Subnet.network);
+        const compressedFirstHost = compressIPv6(ipv6Subnet.firstHost);
+        const compressedLastHost = compressIPv6(ipv6Subnet.lastHost);
+
+        setSubnetInfo({
+          network: compressedNetwork,
+          broadcast: "N/A (IPv6 has no broadcast address)",
+          firstHost: compressedFirstHost,
+          lastHost: compressedLastHost,
+          subnetMask: "N/A (IPv6 uses prefix length)",
+          wildcardMask: "N/A (IPv6 uses prefix length)",
+          totalHosts: Number(ipv6Subnet.totalAddresses > BigInt(Number.MAX_SAFE_INTEGER) ? Number.MAX_SAFE_INTEGER : ipv6Subnet.totalAddresses),
+          usableHosts: Number(ipv6Subnet.usableAddresses > BigInt(Number.MAX_SAFE_INTEGER) ? Number.MAX_SAFE_INTEGER : ipv6Subnet.usableAddresses),
+          cidr: `/${cidr}`,
+          // Store additional IPv6-specific information for enhanced display
+          ipv6Info: {
+            addressType: ipv6Summary.addressType,
+            hostBits: ipv6Summary.hostBits,
+            totalAddressesFormatted: ipv6Summary.totalAddresses,
+            usableAddressesFormatted: ipv6Summary.usableAddresses
+          }
+        });
+        return;
+      }
+
       const cidrNum = parseInt(cidr);
-      
+
       // Enhanced CIDR validation with edge case handling
       if (isNaN(cidrNum) || cidrNum < 0 || cidrNum > 32) {
         setError("CIDR prefix must be a number between 0 and 32");
@@ -190,7 +245,7 @@ export default function SubnetCalculator() {
       }
 
       const hostBits = 32 - cidrNum;
-      
+
       // Handle edge case for /0 subnet (entire IPv4 space) - should be allowed in normal mode
       if (hostBits >= 32) {
         setError("Invalid subnet calculation: host bits exceed 32");
@@ -200,11 +255,11 @@ export default function SubnetCalculator() {
       // Enhanced bitwise operations with overflow protection
       let subnetMask: number;
       let wildcardMask: number;
-      
+
       try {
         subnetMask = hostBits >= 32 ? 0 : (0xFFFFFFFF << hostBits) >>> 0;
         wildcardMask = ~subnetMask >>> 0;
-        
+
         // Validate mask calculations
         if (isNaN(subnetMask) || isNaN(wildcardMask)) {
           throw new Error("Invalid subnet mask calculation");
@@ -218,7 +273,7 @@ export default function SubnetCalculator() {
       let ipInt: number;
       try {
         ipInt = ipToInt(ipAddress);
-        
+
         // Enhanced IP conversion validation
         if (isNaN(ipInt) || ipInt < 0 || ipInt > 0xFFFFFFFF) {
           throw new Error("IP address conversion out of bounds");
@@ -231,7 +286,7 @@ export default function SubnetCalculator() {
 
       let networkInt: number;
       let broadcastInt: number;
-      
+
       try {
         networkInt = (ipInt & subnetMask) >>> 0;
         broadcastInt = (networkInt | wildcardMask) >>> 0;
@@ -240,7 +295,7 @@ export default function SubnetCalculator() {
         if (networkInt > broadcastInt) {
           throw new Error("Network address exceeds broadcast address");
         }
-        
+
         if (isNaN(networkInt) || isNaN(broadcastInt)) {
           throw new Error("Invalid network address calculation");
         }
@@ -253,7 +308,7 @@ export default function SubnetCalculator() {
       // Enhanced host calculation with overflow protection
       let totalHosts: number;
       let usableHosts: number;
-      
+
       try {
         // Handle very large subnets more safely
         if (hostBits >= 31) {
@@ -261,19 +316,24 @@ export default function SubnetCalculator() {
         } else {
           totalHosts = Math.pow(2, hostBits);
         }
-        
+
         // Validate total hosts calculation
         if (isNaN(totalHosts) || totalHosts < 0 || !isFinite(totalHosts)) {
           throw new Error("Invalid total hosts calculation");
         }
-        
+
         // Calculate usable hosts with edge case handling
-        if (hostBits <= 1) {
-          usableHosts = 0; // /31 and /32 subnets have no usable hosts in traditional subnetting
+        if (hostBits === 0) {
+          // /32 subnet - single host route
+          usableHosts = 1;
+        } else if (hostBits === 1) {
+          // /31 subnet - point-to-point link (RFC 3021)
+          usableHosts = 2;
         } else {
+          // Traditional subnetting - subtract network and broadcast addresses
           usableHosts = Math.max(0, totalHosts - 2);
         }
-        
+
       } catch (hostError) {
         console.error("Host calculation error:", hostError);
         setError("Error calculating host addresses. The subnet may be too large.");
@@ -285,7 +345,7 @@ export default function SubnetCalculator() {
 
       let cloudReserved = undefined;
       let firstUsableHost: string;
-      
+
       try {
         firstUsableHost = intToIp(firstHostInt);
       } catch (hostConversionError) {
@@ -306,7 +366,7 @@ export default function SubnetCalculator() {
             }
 
             usableHosts = Math.max(0, totalHosts - provider.reservedCount);
-            
+
             // Enhanced validation for first usable offset
             const firstUsableOffset = networkInt + provider.firstUsableOffset;
             if (firstUsableOffset > broadcastInt || firstUsableOffset < networkInt) {
@@ -315,23 +375,23 @@ export default function SubnetCalculator() {
             }
 
             firstUsableHost = intToIp(firstUsableOffset);
-            
+
             // Enhanced cloud reservation generation with error handling
             try {
               const reservations = provider.getReservations(networkInt, broadcastInt, intToIp);
-              
+
               // Validate reservations
               if (!Array.isArray(reservations) || reservations.length === 0) {
                 throw new Error("Invalid reservations generated");
               }
-              
+
               // Validate each reservation
               reservations.forEach((reservation, index) => {
                 if (!reservation.ip || !reservation.purpose || !reservation.description) {
                   throw new Error(`Invalid reservation at index ${index}`);
                 }
               });
-              
+
               cloudReserved = {
                 provider: provider.name,
                 reservations
@@ -355,18 +415,34 @@ export default function SubnetCalculator() {
         const broadcastAddress = intToIp(broadcastInt);
         const subnetMaskAddress = intToIp(subnetMask);
         const wildcardMaskAddress = intToIp(wildcardMask);
-        const lastHostAddress = hostBits <= 1 ? "N/A" : intToIp(lastHostInt);
-        
+        // Handle first and last host display for edge cases
+        let firstHostDisplay: string;
+        let lastHostDisplay: string;
+
+        if (hostBits === 0) {
+          // /32 subnet - single host route
+          firstHostDisplay = networkAddress;
+          lastHostDisplay = networkAddress;
+        } else if (hostBits === 1) {
+          // /31 subnet - point-to-point link (RFC 3021)
+          firstHostDisplay = networkAddress;
+          lastHostDisplay = intToIp(broadcastInt);
+        } else {
+          // Traditional subnetting
+          firstHostDisplay = firstUsableHost;
+          lastHostDisplay = intToIp(lastHostInt);
+        }
+
         // Validate all IP conversions succeeded
         if (!networkAddress || !broadcastAddress || !subnetMaskAddress || !wildcardMaskAddress) {
           throw new Error("Failed to convert calculated addresses to IP format");
         }
-        
+
         setSubnetInfo({
           network: networkAddress,
           broadcast: broadcastAddress,
-          firstHost: hostBits <= 1 ? "N/A" : firstUsableHost,
-          lastHost: lastHostAddress,
+          firstHost: firstHostDisplay,
+          lastHost: lastHostDisplay,
           subnetMask: subnetMaskAddress,
           wildcardMask: wildcardMaskAddress,
           totalHosts: Math.floor(Math.min(totalHosts, Number.MAX_SAFE_INTEGER)), // Ensure safe integer
@@ -374,7 +450,7 @@ export default function SubnetCalculator() {
           cidr: `/${cidr}`,
           cloudReserved
         });
-        
+
       } catch (finalError) {
         console.error("Final validation error:", finalError);
         setError(`Error finalizing subnet calculation: ${finalError instanceof Error ? finalError.message : 'Unknown error'}`);
@@ -388,13 +464,13 @@ export default function SubnetCalculator() {
       setError(`An unexpected error occurred during subnet calculation: ${errorMessage}. Please check your inputs and try again.`);
       setSubnetInfo(null);
     }
-  }, [ipAddress, cidr, mode, validateCIDR]);
+  }, [ipAddress, cidr, mode, ipVersion, validateCIDR, validateIP]);
 
   useEffect(() => {
     if (ipAddress && cidr) {
       calculateSubnet();
     }
-  }, [ipAddress, cidr, mode, calculateSubnet]);
+  }, [ipAddress, cidr, mode, ipVersion, calculateSubnet]);
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
@@ -448,7 +524,7 @@ export default function SubnetCalculator() {
       <div className="text-center space-y-2 mb-6">
         <h1 className="text-3xl font-bold">Subnet Calculator</h1>
         <p className="text-muted-foreground">
-          Network planning tool for general networking, AWS, Azure and Google Cloud.
+          Network planning tool for IPv4/IPv6 subnetting, AWS, Azure and Google Cloud.
         </p>
         <p className="text-sm text-muted-foreground">
           From Dan Jones at the <a href="https://artofinfra.com" className="text-primary hover:text-primary/80 hover:underline" target="_blank" rel="noopener noreferrer">artofinfra.com</a> blog
@@ -459,17 +535,42 @@ export default function SubnetCalculator() {
         <CardHeader>
           <CardTitle>Network Input</CardTitle>
           <CardDescription>
-            Enter an IP address and CIDR notation to calculate subnet details
+            {ipVersion === "ipv4" 
+              ? "Enter an IP address and CIDR notation to calculate subnet details"
+              : "Enter an IPv6 address and prefix length to calculate subnet details. Cloud providers use standardized /64 prefixes for IPv6 subnets."
+            }
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="space-y-2 flex-1">
+              <Label htmlFor="ipVersion">IP Version</Label>
+              <Select value={ipVersion} onValueChange={(value: IPVersion) => {
+                setIpVersion(value);
+                // Update default values when switching IP versions
+                if (value === "ipv4") {
+                  setIpAddress("192.168.1.0");
+                  setCidr("24");
+                } else {
+                  setIpAddress("2001:db8::1");
+                  setCidr("64");
+                }
+              }}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select IP version" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ipv4">IPv4</SelectItem>
+                  <SelectItem value="ipv6">IPv6</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2 flex-1">
               <Label htmlFor="ip">IP Address</Label>
               <Input
                 id="ip"
                 type="text"
-                placeholder="192.168.1.0"
+                placeholder={ipVersion === "ipv4" ? "192.168.1.0" : "2001:db8::1"}
                 value={ipAddress}
                 onChange={(e) => setIpAddress(e.target.value)}
                 className="w-full"
@@ -481,8 +582,11 @@ export default function SubnetCalculator() {
                 id="cidr"
                 type="number"
                 min="0"
-                max={mode === "normal" ? "32" : CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS]?.maxCidr || "32"}
-                placeholder="24"
+                max={ipVersion === "ipv4" ?
+                  (mode === "normal" ? "32" : CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS]?.maxCidr || "32") :
+                  "128"
+                }
+                placeholder={ipVersion === "ipv4" ? "24" : "64"}
                 value={cidr}
                 onChange={(e) => setCidr(e.target.value)}
                 className="w-full"
@@ -490,17 +594,26 @@ export default function SubnetCalculator() {
             </div>
             <div className="space-y-2 flex-1">
               <Label htmlFor="mode">Mode</Label>
-              <Select value={mode} onValueChange={setMode}>
+              <Select value={mode} onValueChange={setMode} disabled={ipVersion === "ipv6"}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select mode" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="normal">Normal Subnetting</SelectItem>
-                  <SelectItem value="aws">AWS VPC Mode</SelectItem>
-                  <SelectItem value="azure">Azure VNet Mode</SelectItem>
-                  <SelectItem value="gcp">Google Cloud VPC Mode</SelectItem>
+                  {ipVersion === "ipv4" && (
+                    <>
+                      <SelectItem value="aws">AWS VPC Mode</SelectItem>
+                      <SelectItem value="azure">Azure VNet Mode</SelectItem>
+                      <SelectItem value="gcp">Google Cloud VPC Mode</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
+              {ipVersion === "ipv6" && (
+                <p className="text-xs text-muted-foreground">
+                  Cloud providers use fixed /64 prefixes for IPv6 subnets
+                </p>
+              )}
             </div>
           </div>
 
@@ -520,7 +633,26 @@ export default function SubnetCalculator() {
             <CardHeader>
               <CardTitle>Subnet Information</CardTitle>
               <CardDescription>
-                Calculated network details for {ipAddress}/{cidr} {mode !== "normal" && `(${CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS]?.name} Mode)`}
+                {(() => {
+                  const cidrNum = parseInt(cidr);
+                  let description = `Calculated network details for ${ipAddress}/${cidr}`;
+                  
+                  if (ipVersion === "ipv4") {
+                    if (cidrNum === 32) {
+                      description += " (Host Route - Single IP address)";
+                    } else if (cidrNum === 31) {
+                      description += " (Point-to-Point Link - RFC 3021)";
+                    }
+                    
+                    if (mode !== "normal") {
+                      description += ` (${CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS]?.name} Mode)`;
+                    }
+                  } else if (ipVersion === "ipv6") {
+                    description += " (IPv6 Subnet)";
+                  }
+                  
+                  return description;
+                })()}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -557,17 +689,43 @@ export default function SubnetCalculator() {
                     <TableCell>{subnetInfo.wildcardMask}</TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell className="font-medium">Total Hosts</TableCell>
-                    <TableCell>{subnetInfo.totalHosts.toLocaleString()}</TableCell>
+                    <TableCell className="font-medium">
+                      {ipVersion === "ipv6" ? "Total Addresses" : "Total Hosts"}
+                    </TableCell>
+                    <TableCell>
+                      {subnetInfo.ipv6Info ? 
+                        subnetInfo.ipv6Info.totalAddressesFormatted : 
+                        subnetInfo.totalHosts.toLocaleString()
+                      }
+                    </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell className="font-medium">Usable Hosts</TableCell>
-                    <TableCell>{subnetInfo.usableHosts.toLocaleString()}</TableCell>
+                    <TableCell className="font-medium">
+                      {ipVersion === "ipv6" ? "Usable Addresses" : "Usable Hosts"}
+                    </TableCell>
+                    <TableCell>
+                      {subnetInfo.ipv6Info ? 
+                        subnetInfo.ipv6Info.usableAddressesFormatted : 
+                        subnetInfo.usableHosts.toLocaleString()
+                      }
+                    </TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-medium">CIDR Notation</TableCell>
                     <TableCell>{subnetInfo.network}{subnetInfo.cidr}</TableCell>
                   </TableRow>
+                  {subnetInfo.ipv6Info && (
+                    <>
+                      <TableRow>
+                        <TableCell className="font-medium">Address Type</TableCell>
+                        <TableCell>{subnetInfo.ipv6Info.addressType}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">Host Bits</TableCell>
+                        <TableCell>{subnetInfo.ipv6Info.hostBits} bits</TableCell>
+                      </TableRow>
+                    </>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
