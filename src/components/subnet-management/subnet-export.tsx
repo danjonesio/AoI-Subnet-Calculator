@@ -280,10 +280,11 @@ export function SubnetExport({
 
   // Get MIME type for format
   const getMimeType = (format: ExportOptions['format']): string => {
-    const mimeTypes = {
+    const mimeTypes: Record<ExportOptions['format'], string> = {
       text: 'text/plain',
       csv: 'text/csv',
-      json: 'application/json'
+      json: 'application/json',
+      yaml: 'text/yaml'
     };
     return mimeTypes[format];
   };
@@ -524,7 +525,7 @@ export function SubnetExport({
             <Checkbox
               id="selectedOnly"
               checked={selectedOnly}
-              onCheckedChange={setSelectedOnly}
+              onCheckedChange={(checked) => setSelectedOnly(checked === true)}
               disabled={selectedSubnets.size === 0}
             />
             <label 
@@ -540,7 +541,7 @@ export function SubnetExport({
             <Checkbox
               id="includeHeaders"
               checked={includeHeaders}
-              onCheckedChange={setIncludeHeaders}
+              onCheckedChange={(checked) => setIncludeHeaders(checked === true)}
             />
             <label htmlFor="includeHeaders" className="text-sm">
               Include headers and titles
@@ -551,7 +552,7 @@ export function SubnetExport({
             <Checkbox
               id="includeMetadata"
               checked={includeMetadata}
-              onCheckedChange={setIncludeMetadata}
+              onCheckedChange={(checked) => setIncludeMetadata(checked === true)}
             />
             <label htmlFor="includeMetadata" className="text-sm">
               Include metadata and additional information
