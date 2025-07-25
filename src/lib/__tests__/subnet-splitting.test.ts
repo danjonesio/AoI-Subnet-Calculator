@@ -18,6 +18,7 @@ import {
   findOptimalJoinGroups,
   batchJoinSubnets
 } from '../subnet-splitting';
+import { SplitSubnet, CloudReservation } from '../types';
 import {
   SubnetInfo,
   SplitOptions

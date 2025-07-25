@@ -17,7 +17,8 @@ const mockSubnets: SplitSubnet[] = [
     usableHosts: 126,
     parentId: undefined,
     level: 0,
-    isSelected: false
+    isSelected: false,
+    ipVersion: 'ipv4'
   },
   {
     id: '2',
@@ -30,7 +31,8 @@ const mockSubnets: SplitSubnet[] = [
     usableHosts: 126,
     parentId: undefined,
     level: 0,
-    isSelected: false
+    isSelected: false,
+    ipVersion: 'ipv4'
   }
 ];
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Github, Newspaper } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Github, Newspaper, AlertCircle, Loader2, Info } from "lucide-react";
 import { useTheme } from "next-themes";
 import Image from "next/image";
 import { validateIPv6, compressIPv6, validateIPv6CIDR, calculateIPv6Subnet, getIPv6SubnetSummary } from "@/lib/utils";
@@ -22,6 +23,7 @@ import {
 import { SubnetSplitter } from "@/components/subnet-management/subnet-splitter";
 import { SubnetJoiner } from "@/components/subnet-management/subnet-joiner";
 import { SubnetTree } from "@/components/subnet-management/subnet-tree";
+import { SubnetList } from "@/components/subnet-management/subnet-list";
 import { SubnetExport } from "@/components/subnet-management/subnet-export";
 
 interface CloudReservation {
@@ -297,9 +299,9 @@ export default function SubnetCalculator() {
     }
   }, []);
 
-  const updateSubnetSort = useCallback((field: 'network' | 'cidr' | 'hosts' | 'created', order: 'asc' | 'desc') => {
+  const updateSubnetSort = useCallback((field: string, order: 'asc' | 'desc') => {
     try {
-      setSortBy(field);
+      setSortBy(field as 'network' | 'cidr' | 'hosts' | 'created');
       setSortOrder(order);
     } catch (error) {
       setSubnetError(error instanceof Error ? error.message : 'Failed to update sort');
@@ -686,10 +688,59 @@ export default function SubnetCalculator() {
     }
   }, [ipAddress, cidr, mode, ipVersion, calculateSubnet]);
 
-  // Reset subnet management when main calculation changes
+  // Reset subnet management when main calculation changes (Task 9.2)
   useEffect(() => {
+    // Reset subnet management when IP address or CIDR changes
     resetSubnetManagement();
-  }, [ipAddress, cidr, mode, ipVersion, resetSubnetManagement]);
+  }, [ipAddress, cidr, resetSubnetManagement]);
+
+  // Recalculate split subnets when cloud provider mode changes (Task 9.2)
+  useEffect(() => {
+    // Only recalculate if we have existing split subnets and a valid parent subnet
+    if (splitSubnets.length > 0 && subnetInfo && ipVersion === "ipv4") {
+      setIsSubnetLoading(true);
+      try {
+        // Recalculate all split subnets with new cloud provider constraints
+        setSplitSubnets(prevSubnets => {
+          return prevSubnets.map(subnet => {
+            // Recalculate usable hosts based on new cloud mode
+            let usableHosts = subnet.totalHosts;
+            let cloudReserved = undefined;
+
+            if (mode !== "normal") {
+              const provider = CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS];
+              if (provider) {
+                usableHosts = Math.max(0, subnet.totalHosts - provider.reservedCount);
+                
+                // Generate cloud reservations for this subnet
+                const networkInt = ipToInt(subnet.network);
+                const broadcastInt = ipToInt(subnet.broadcast);
+                const reservations = provider.getReservations(networkInt, broadcastInt, intToIp);
+                
+                cloudReserved = reservations;
+              }
+            }
+
+            return {
+              ...subnet,
+              usableHosts,
+              cloudReserved
+            };
+          });
+        });
+        setSubnetError(null);
+      } catch (error) {
+        setSubnetError(error instanceof Error ? error.message : 'Failed to recalculate subnets for cloud provider mode');
+      } finally {
+        setIsSubnetLoading(false);
+      }
+    }
+  }, [mode, subnetInfo, ipVersion]);
+
+  // Update subnet management visibility based on calculation state (Task 9.2)
+  const shouldShowSubnetManagement = useMemo(() => {
+    return subnetInfo !== null && ipVersion === "ipv4" && !error;
+  }, [subnetInfo, ipVersion, error]);
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
@@ -981,91 +1032,251 @@ export default function SubnetCalculator() {
             </Card>
           )}
 
-          {/* Subnet Management Section */}
-          {subnetInfo && ipVersion === "ipv4" && (
-            <SubnetSplitter
-              parentSubnet={{
-                ...subnetInfo,
-                id: subnetInfo.network + subnetInfo.cidr,
-                level: 0
-              }}
-              ipVersion={ipVersion}
-              cloudMode={mode as CloudMode}
-              onSplit={addSplitSubnets}
-              onError={(error: SubnetError) => setSubnetError(error.message)}
-              disabled={isSubnetLoading}
-              maxSubnets={1000}
-            />
-          )}
+          {/* Advanced Subnet Management Section - Updated for Task 9.2 */}
+          {shouldShowSubnetManagement && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Advanced Subnet Management</span>
+                  {splitSubnets.length > 0 && (
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm font-normal text-muted-foreground">
+                        {splitSubnets.length} subnet{splitSubnets.length !== 1 ? 's' : ''}
+                      </span>
+                      {selectedSubnets.size > 0 && (
+                        <span className="text-sm font-normal text-muted-foreground">
+                          {selectedSubnets.size} selected
+                        </span>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={resetSubnetManagement}
+                        disabled={isSubnetLoading}
+                      >
+                        Reset All
+                      </Button>
+                    </div>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  Split the calculated subnet into smaller networks or join adjacent subnets back together.
+                  {mode !== "normal" && ` Cloud provider reservations (${mode.toUpperCase()}) are automatically applied.`}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Error Display */}
+                {subnetError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      {subnetError}
+                    </AlertDescription>
+                  </Alert>
+                )}
 
-          {/* Subnet Joiner Section */}
-          {splitSubnets.length > 0 && ipVersion === "ipv4" && (
-            <SubnetJoiner
-              availableSubnets={splitSubnets}
-              selectedSubnets={selectedSubnets}
-              ipVersion={ipVersion}
-              onSelectionChange={setSelectedSubnets}
-              onJoin={(joinedSubnet, operation) => {
-                // Remove the joined subnets from the list
-                const subnetIdsToRemove = operation.sourceSubnets;
-                removeSubnets(subnetIdsToRemove, operation);
-                
-                // Add the new joined subnet
-                addSplitSubnets([joinedSubnet], {
-                  ...operation,
-                  type: 'join',
-                  resultSubnets: [joinedSubnet]
-                });
-              }}
-              onError={(error: SubnetError) => setSubnetError(error.message)}
-              disabled={isSubnetLoading}
-            />
-          )}
+                {/* Loading State */}
+                {isSubnetLoading && (
+                  <Alert>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <AlertDescription>
+                      Processing subnet operation...
+                    </AlertDescription>
+                  </Alert>
+                )}
 
-          {/* Subnet Hierarchy Visualization */}
-          {splitSubnets.length > 0 && (
-            <SubnetTree
-              subnets={splitSubnets}
-              selectedSubnets={selectedSubnets}
-              onSelectionChange={setSelectedSubnets}
-              onCopySubnet={async (subnet) => {
-                try {
-                  const subnetInfo = `Network: ${subnet.network}/${subnet.cidr}
+                {/* Subnet Splitting Section */}
+                <div className="space-y-4">
+                  <SubnetSplitter
+                    parentSubnet={{
+                      ...subnetInfo,
+                      id: subnetInfo.network + subnetInfo.cidr,
+                      level: 0
+                    }}
+                    ipVersion={ipVersion}
+                    cloudMode={mode as CloudMode}
+                    onSplit={addSplitSubnets}
+                    onError={(error: SubnetError) => setSubnetError(error.message)}
+                    disabled={isSubnetLoading}
+                    maxSubnets={1000}
+                  />
+                </div>
+
+                {/* Subnet Management Controls - Only show when subnets exist */}
+                {splitSubnets.length > 0 && (
+                  <>
+                    {/* Subnet Joining Section */}
+                    <div className="space-y-4">
+                      <SubnetJoiner
+                        availableSubnets={splitSubnets}
+                        selectedSubnets={selectedSubnets}
+                        ipVersion={ipVersion}
+                        onSelectionChange={setSelectedSubnets}
+                        onJoin={(joinedSubnet, operation) => {
+                          // Remove the joined subnets from the list
+                          const subnetIdsToRemove = operation.sourceSubnets;
+                          removeSubnets(subnetIdsToRemove, operation);
+                          
+                          // Add the new joined subnet
+                          addSplitSubnets([joinedSubnet], {
+                            ...operation,
+                            type: 'join',
+                            resultSubnets: [joinedSubnet]
+                          });
+                        }}
+                        onError={(error: SubnetError) => setSubnetError(error.message)}
+                        disabled={isSubnetLoading}
+                      />
+                    </div>
+
+                    {/* View Toggle */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">View:</span>
+                        <div className="flex rounded-md border">
+                          <Button
+                            variant={currentView === 'list' ? 'default' : 'ghost'}
+                            size="sm"
+                            onClick={() => setCurrentView('list')}
+                            className="rounded-r-none"
+                          >
+                            List
+                          </Button>
+                          <Button
+                            variant={currentView === 'tree' ? 'default' : 'ghost'}
+                            size="sm"
+                            onClick={() => setCurrentView('tree')}
+                            className="rounded-l-none"
+                          >
+                            Tree
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {/* Quick Actions */}
+                      <div className="flex items-center gap-2">
+                        {selectedSubnets.size > 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={clearSubnetSelection}
+                          >
+                            Clear Selection
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={selectAllSubnets}
+                        >
+                          Select All
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Subnet Display - List or Tree View */}
+                    {currentView === 'list' ? (
+                      <SubnetList
+                        subnets={splitSubnets}
+                        selectedSubnets={selectedSubnets}
+                        onSelectionChange={setSelectedSubnets}
+                        onSort={updateSubnetSort}
+                        onFilter={updateSubnetFilter}
+                        onCopySubnet={async (subnet) => {
+                          try {
+                            const subnetInfo = `Network: ${subnet.network}/${subnet.cidr}
 Broadcast: ${subnet.broadcast}
 First Host: ${subnet.firstHost}
 Last Host: ${subnet.lastHost}
 Total Hosts: ${subnet.totalHosts.toLocaleString()}
 Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
-                  
-                  await navigator.clipboard.writeText(subnetInfo);
-                  // Could add a toast notification here in the future
-                } catch (error) {
-                  console.error('Failed to copy subnet information:', error);
-                  setSubnetError('Failed to copy subnet information to clipboard');
-                }
-              }}
-              showRelationships={true}
-              showSelection={true}
-              showActions={true}
-              loading={isSubnetLoading}
-            />
+                            
+                            await navigator.clipboard.writeText(subnetInfo);
+                            // Success feedback could be added here
+                          } catch (error) {
+                            console.error('Failed to copy subnet information:', error);
+                            setSubnetError('Failed to copy subnet information to clipboard');
+                          }
+                        }}
+                        sortBy={sortBy}
+                        sortOrder={sortOrder}
+                        filterText={filterText}
+                        loading={isSubnetLoading}
+                        showSelection={true}
+                        showActions={true}
+                      />
+                    ) : (
+                      <SubnetTree
+                        subnets={splitSubnets}
+                        selectedSubnets={selectedSubnets}
+                        onSelectionChange={setSelectedSubnets}
+                        onCopySubnet={async (subnet) => {
+                          try {
+                            const subnetInfo = `Network: ${subnet.network}/${subnet.cidr}
+Broadcast: ${subnet.broadcast}
+First Host: ${subnet.firstHost}
+Last Host: ${subnet.lastHost}
+Total Hosts: ${subnet.totalHosts.toLocaleString()}
+Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
+                            
+                            await navigator.clipboard.writeText(subnetInfo);
+                            // Success feedback could be added here
+                          } catch (error) {
+                            console.error('Failed to copy subnet information:', error);
+                            setSubnetError('Failed to copy subnet information to clipboard');
+                          }
+                        }}
+                        expandedNodes={expandedNodes}
+                        onExpandChange={setExpandedNodes}
+                        showRelationships={true}
+                        filterText={filterText}
+                        onFilter={updateSubnetFilter}
+                        loading={isSubnetLoading}
+                        showSelection={true}
+                        showActions={true}
+                      />
+                    )}
+
+                    {/* Export Section */}
+                    <div className="pt-4 border-t">
+                      <SubnetExport
+                        subnets={splitSubnets}
+                        selectedSubnets={selectedSubnets}
+                        onExport={(result) => {
+                          // Optional: Add success feedback or logging
+                          console.log('Export completed:', result.filename, result.size, 'bytes');
+                        }}
+                        onError={(error) => {
+                          setSubnetError(error.message);
+                        }}
+                        availableFormats={['text', 'csv', 'json']}
+                      />
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
           )}
 
-          {/* Subnet Export Functionality */}
-          {splitSubnets.length > 0 && (
-            <SubnetExport
-              subnets={splitSubnets}
-              selectedSubnets={selectedSubnets}
-              onExport={(result) => {
-                // Optional: Add success feedback or logging
-                console.log('Export completed:', result.filename, result.size, 'bytes');
-              }}
-              onError={(error) => {
-                setSubnetError(error.message);
-              }}
-              availableFormats={['text', 'csv', 'json']}
-              className="mt-4"
-            />
+          {/* IPv6 Notice */}
+          {subnetInfo && ipVersion === "ipv6" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Advanced Subnet Management</CardTitle>
+                <CardDescription>
+                  IPv6 subnet management features are coming soon.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    Advanced subnet splitting and joining features are currently available for IPv4 networks only. 
+                    IPv6 support will be added in a future update.
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
           )}
         </>
       )}
