@@ -1,0 +1,27 @@
+# Robots.txt for Art of Infra Subnet Calculator
+# Allow all legitimate crawlers
+
+User-agent: *
+Allow: /
+
+# Block common nefarious/spam bots
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: BLEXBot
+Disallow: /
+
+User-agent: PetalBot
+Disallow: /
+
+# Sitemap location (if you add one later)
+# Sitemap: https://your-domain.com/sitemap.xml

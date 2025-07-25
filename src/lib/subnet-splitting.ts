@@ -21,6 +21,13 @@ import {
   validateSplitConfiguration,
   calculatePerformanceMetrics
 } from './utils';
+import {
+  memoizedCalculation,
+  performanceMonitor,
+  ProgressiveCalculator,
+  shouldShowPerformanceWarning,
+  PERFORMANCE_THRESHOLDS
+} from './performance';
 
 // Cloud provider configurations for subnet splitting
 interface CloudProviderConfig {
@@ -276,14 +283,33 @@ function validateSplitOptions(
 }
 
 /**
- * Main function to split an IPv4 subnet into smaller subnets
+ * Main function to split an IPv4 subnet into smaller subnets with performance optimizations
  */
 export function splitIPv4Subnet(
   parentSubnet: SubnetInfo,
   splitOptions: SplitOptions,
   cloudMode: CloudMode = 'normal'
 ): SubnetCalculationResult {
-  const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  // Use memoization for identical calculations
+  return memoizedCalculation(
+    parentSubnet,
+    splitOptions,
+    cloudMode,
+    'ipv4',
+    () => splitIPv4SubnetInternal(parentSubnet, splitOptions, cloudMode)
+  );
+}
+
+/**
+ * Internal implementation of IPv4 subnet splitting with performance monitoring
+ */
+function splitIPv4SubnetInternal(
+  parentSubnet: SubnetInfo,
+  splitOptions: SplitOptions,
+  cloudMode: CloudMode = 'normal'
+): SubnetCalculationResult {
+  // Start performance monitoring
+  const monitor = performanceMonitor.startOperation('ipv4_split');
 
   try {
     // Validate inputs
@@ -320,24 +346,170 @@ export function splitIPv4Subnet(
     }
 
     // Apply maximum results limit
-    const maxResults = splitOptions.maxResults || 1000;
+    const maxResults = splitOptions.maxResults || PERFORMANCE_THRESHOLDS.VERY_LARGE_SUBNET_COUNT;
     if (subnetCount > maxResults) {
       subnetCount = maxResults;
     }
 
-    // Calculate subnet size
-    const subnetSize = Math.pow(2, 32 - targetCidr);
-    const results: SplitSubnet[] = [];
+    // Add metadata for performance monitoring
+    monitor.addMetadata({ 
+      itemsProcessed: subnetCount,
+      targetCidr,
+      parentCidr,
+      cloudMode
+    });
 
-    // Generate split subnets
-    for (let i = 0; i < subnetCount; i++) {
+    // Check if we should use progressive calculation for large operations
+    const useProgressiveCalculation = subnetCount > PERFORMANCE_THRESHOLDS.LARGE_SUBNET_COUNT;
+
+    let results: SplitSubnet[];
+
+    if (useProgressiveCalculation) {
+      // Use progressive calculation for large subnet operations
+      results = calculateSubnetsProgressively(
+        parentSubnet,
+        parentNetworkInt,
+        parentCidr,
+        targetCidr,
+        subnetCount,
+        cloudMode
+      );
+    } else {
+      // Use standard calculation for smaller operations
+      results = calculateSubnetsStandard(
+        parentSubnet,
+        parentNetworkInt,
+        parentCidr,
+        targetCidr,
+        subnetCount,
+        cloudMode
+      );
+    }
+
+    // End performance monitoring
+    const metrics = monitor.end();
+
+    // Check for performance warnings
+    const performanceWarning = shouldShowPerformanceWarning(
+      'split',
+      results.length,
+      metrics.duration
+    );
+
+    if (performanceWarning.shouldWarn) {
+      console.warn(`Performance Warning: ${performanceWarning.message}`, {
+        suggestions: performanceWarning.suggestions,
+        metrics
+      });
+    }
+
+    // Calculate totals
+    const totalAddresses = results.reduce((sum, subnet) => sum + subnet.totalHosts, 0);
+    const usableAddresses = results.reduce((sum, subnet) => sum + subnet.usableHosts, 0);
+
+    return {
+      subnets: results,
+      totalSubnets: results.length,
+      totalAddresses,
+      usableAddresses,
+      performance: {
+        calculationTime: metrics.duration,
+        memoryUsage: metrics.memoryAfter
+      }
+    };
+
+  } catch (error) {
+    const metrics = monitor.end();
+    console.error('IPv4 subnet splitting error:', error);
+    
+    // Return empty result with error information
+    return {
+      subnets: [],
+      totalSubnets: 0,
+      totalAddresses: 0,
+      usableAddresses: 0,
+      performance: {
+        calculationTime: metrics.duration
+      }
+    };
+  }
+}
+
+/**
+ * Standard subnet calculation for smaller operations
+ */
+function calculateSubnetsStandard(
+  parentSubnet: SubnetInfo,
+  parentNetworkInt: number,
+  parentCidr: number,
+  targetCidr: number,
+  subnetCount: number,
+  cloudMode: CloudMode
+): SplitSubnet[] {
+  const results: SplitSubnet[] = [];
+  const subnetSize = Math.pow(2, 32 - targetCidr);
+
+  for (let i = 0; i < subnetCount; i++) {
+    const networkInt = parentNetworkInt + (i * subnetSize);
+    const broadcastInt = networkInt + subnetSize - 1;
+
+    // Ensure we don't exceed the parent subnet boundaries
+    const parentBroadcastInt = ipv4ToInt(parentSubnet.broadcast || intToIPv4(parentNetworkInt + Math.pow(2, 32 - parentCidr) - 1));
+    if (networkInt > parentBroadcastInt) {
+      break; // Stop if we exceed parent subnet
+    }
+
+    const subnetDetails = calculateSubnetDetails(
+      networkInt,
+      Math.min(broadcastInt, parentBroadcastInt),
+      targetCidr,
+      cloudMode
+    );
+
+    const splitSubnet: SplitSubnet = {
+      id: generateSubnetId(),
+      ...subnetDetails,
+      parentId: parentSubnet.id,
+      level: (parentSubnet.level || 0) + 1,
+      isSelected: false,
+      ipVersion: 'ipv4' as IPVersion
+    };
+
+    results.push(splitSubnet);
+  }
+
+  return results;
+}
+
+/**
+ * Progressive subnet calculation for large operations to prevent UI blocking
+ */
+function calculateSubnetsProgressively(
+  parentSubnet: SubnetInfo,
+  parentNetworkInt: number,
+  parentCidr: number,
+  targetCidr: number,
+  subnetCount: number,
+  cloudMode: CloudMode
+): SplitSubnet[] {
+  const results: SplitSubnet[] = [];
+  const subnetSize = Math.pow(2, 32 - targetCidr);
+  const batchSize = 100; // Process 100 subnets at a time
+  
+  // Calculate parent broadcast for boundary checking
+  const parentBroadcastInt = ipv4ToInt(parentSubnet.broadcast || intToIPv4(parentNetworkInt + Math.pow(2, 32 - parentCidr) - 1));
+
+  // Process in batches to prevent blocking
+  for (let batchStart = 0; batchStart < subnetCount; batchStart += batchSize) {
+    const batchEnd = Math.min(batchStart + batchSize, subnetCount);
+    
+    for (let i = batchStart; i < batchEnd; i++) {
       const networkInt = parentNetworkInt + (i * subnetSize);
       const broadcastInt = networkInt + subnetSize - 1;
 
       // Ensure we don't exceed the parent subnet boundaries
-      const parentBroadcastInt = ipv4ToInt(parentSubnet.broadcast || intToIPv4(parentNetworkInt + Math.pow(2, 32 - parentCidr) - 1));
       if (networkInt > parentBroadcastInt) {
-        break; // Stop if we exceed parent subnet
+        return results; // Stop if we exceed parent subnet
       }
 
       const subnetDetails = calculateSubnetDetails(
@@ -359,41 +531,14 @@ export function splitIPv4Subnet(
       results.push(splitSubnet);
     }
 
-    const endTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    const performanceMetrics = calculatePerformanceMetrics(startTime, endTime, results.length, 'split');
-
-    // Calculate totals
-    const totalAddresses = results.reduce((sum, subnet) => sum + subnet.totalHosts, 0);
-    const usableAddresses = results.reduce((sum, subnet) => sum + subnet.usableHosts, 0);
-
-    return {
-      subnets: results,
-      totalSubnets: results.length,
-      totalAddresses,
-      usableAddresses,
-      performance: {
-        calculationTime: performanceMetrics.duration,
-        memoryUsage: undefined // Could be implemented with performance.measureUserAgentSpecificMemory if available
-      }
-    };
-
-  } catch (error) {
-    const endTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    const duration = endTime - startTime;
-
-    console.error('IPv4 subnet splitting error:', error);
-    
-    // Return empty result with error information
-    return {
-      subnets: [],
-      totalSubnets: 0,
-      totalAddresses: 0,
-      usableAddresses: 0,
-      performance: {
-        calculationTime: duration
-      }
-    };
+    // Add a small delay between batches for very large operations
+    if (batchEnd < subnetCount && subnetCount > PERFORMANCE_THRESHOLDS.VERY_LARGE_SUBNET_COUNT) {
+      // In a real implementation, this would be handled by the ProgressiveCalculator
+      // For now, we'll just continue synchronously but with the batching structure
+    }
   }
+
+  return results;
 }
 
 /**

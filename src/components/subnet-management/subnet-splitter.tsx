@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import {
   createSubnetError 
 } from "@/lib/subnet-splitting";
 import { generateOperationId } from "@/lib/utils";
+import { debounce, performanceMonitor, shouldShowPerformanceWarning } from "@/lib/performance";
 
 export function SubnetSplitter({
   parentSubnet,
@@ -37,6 +38,8 @@ export function SubnetSplitter({
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
+  const [debouncedSplitCount, setDebouncedSplitCount] = useState<string>('2');
+  const [debouncedCustomCidr, setDebouncedCustomCidr] = useState<string>('');
 
   // Extract parent CIDR number for calculations
   const parentCidr = useMemo(() => {
@@ -44,17 +47,41 @@ export function SubnetSplitter({
     return match ? parseInt(match[1], 10) : 0;
   }, [parentSubnet.cidr]);
 
-  // Calculate split preview
+  // Debounced input handlers for performance optimization
+  const debouncedSplitCountUpdate = useMemo(
+    () => debounce((value: string) => {
+      setDebouncedSplitCount(value);
+    }, 300),
+    []
+  );
+
+  const debouncedCustomCidrUpdate = useMemo(
+    () => debounce((value: string) => {
+      setDebouncedCustomCidr(value);
+    }, 300),
+    []
+  );
+
+  // Update debounced values when inputs change
+  useEffect(() => {
+    debouncedSplitCountUpdate(splitCount);
+  }, [splitCount, debouncedSplitCountUpdate]);
+
+  useEffect(() => {
+    debouncedCustomCidrUpdate(customCidr);
+  }, [customCidr, debouncedCustomCidrUpdate]);
+
+  // Calculate split preview using debounced values for better performance
   const splitPreview = useMemo(() => {
     const options: SplitOptions = {
       splitType,
-      splitCount: splitType === 'equal' ? parseInt(splitCount) : undefined,
-      customCidr: splitType === 'custom' ? parseInt(customCidr) : undefined,
+      splitCount: splitType === 'equal' ? parseInt(debouncedSplitCount) : undefined,
+      customCidr: splitType === 'custom' ? parseInt(debouncedCustomCidr) : undefined,
       maxResults: maxSubnets
     };
 
     return calculateSplitPreview(parentCidr, options);
-  }, [parentCidr, splitType, splitCount, customCidr, maxSubnets]);
+  }, [parentCidr, splitType, debouncedSplitCount, debouncedCustomCidr, maxSubnets]);
 
   // Real-time validation with enhanced error handling
   const validation = useMemo((): ValidationResult => {
@@ -298,6 +325,15 @@ export function SubnetSplitter({
       setIsValidating(true);
       
       const executeDirectSplit = async () => {
+        // Start performance monitoring
+        const monitor = performanceMonitor.startOperation('subnet_split_ui');
+        monitor.addMetadata({ 
+          splitType, 
+          expectedSubnets: splitPreview.subnetCount,
+          cloudMode,
+          ipVersion 
+        });
+
         try {
           const options: SplitOptions = {
             splitType,
@@ -310,6 +346,23 @@ export function SubnetSplitter({
           const { splitIPv4Subnet } = await import('@/lib/subnet-splitting');
           
           const result = splitIPv4Subnet(parentSubnet, options, cloudMode);
+          
+          // End performance monitoring
+          const metrics = monitor.end();
+          
+          // Check for performance warnings
+          const performanceWarning = shouldShowPerformanceWarning(
+            'split',
+            result.subnets.length,
+            metrics.duration
+          );
+
+          if (performanceWarning.shouldWarn) {
+            console.warn(`Performance Warning: ${performanceWarning.message}`, {
+              suggestions: performanceWarning.suggestions,
+              metrics
+            });
+          }
           
           if (result.subnets.length === 0) {
             onError(createSubnetError(

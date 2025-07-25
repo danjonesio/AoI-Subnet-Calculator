@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, memo } from 'react';
 import {
   Table,
   TableBody,
@@ -35,6 +35,8 @@ import {
 } from 'lucide-react';
 import { SplitSubnet } from '@/lib/types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { VirtualSubnetList } from './virtual-subnet-list';
+import { debounce } from '@/lib/performance';
 
 interface SubnetListProps {
   subnets: SplitSubnet[];
@@ -55,7 +57,8 @@ interface SubnetListProps {
 
 type SortField = 'network' | 'cidr' | 'totalHosts' | 'usableHosts' | 'firstHost' | 'lastHost';
 
-export function SubnetList({
+// Memoized SubnetList component for optimal performance
+export const SubnetList = memo<SubnetListProps>(({
   subnets,
   selectedSubnets,
   onSelectionChange,
@@ -70,7 +73,8 @@ export function SubnetList({
   showSelection = true,
   showActions = true,
   className = ''
-}: SubnetListProps) {
+}) => {
+  // Always initialize hooks at the top level
   const [internalSortBy, setInternalSortBy] = useState<SortField | null>(null);
   const [internalSortOrder, setInternalSortOrder] = useState<'asc' | 'desc'>('asc');
   const [internalFilterText, setInternalFilterText] = useState<string>(filterText);
@@ -81,14 +85,23 @@ export function SubnetList({
     subnetId: string;
   } | null>(null);
 
-  // Handle sorting
+  // Determine if we should use virtual scrolling based on subnet count
+  const shouldUseVirtualScrolling = subnets.length > 100;
+
+  // Debounced filter handler for better performance
+  const debouncedFilter = useMemo(
+    () => debounce((value: string) => {
+      onFilter?.(value);
+    }, 300),
+    [onFilter]
+  );
+
+  // Handle sorting with memoization
   const handleSort = useCallback((field: SortField) => {
     let newOrder: 'asc' | 'desc';
     if (internalSortBy === field) {
-      // If clicking the same field, toggle the order
       newOrder = internalSortOrder === 'asc' ? 'desc' : 'asc';
     } else {
-      // If clicking a different field, start with ascending
       newOrder = 'asc';
     }
     setInternalSortBy(field);
@@ -96,107 +109,16 @@ export function SubnetList({
     onSort?.(field, newOrder);
   }, [internalSortBy, internalSortOrder, onSort]);
 
-  // Handle filtering
+  // Handle filtering with debouncing
   const handleFilterChange = useCallback((value: string) => {
     setInternalFilterText(value);
-    onFilter?.(value);
-  }, [onFilter]);
+    debouncedFilter(value);
+  }, [debouncedFilter]);
 
   const clearFilter = useCallback(() => {
     setInternalFilterText('');
     onFilter?.('');
   }, [onFilter]);
-
-  // Sort and filter subnets
-  const sortedAndFilteredSubnets = useMemo(() => {
-    // First sort the subnets (only if a sort field has been selected)
-    let sorted = [...subnets];
-    
-    if (internalSortBy) {
-      sorted = sorted.sort((a, b) => {
-        let aValue: string | number;
-        let bValue: string | number;
-
-        switch (internalSortBy) {
-          case 'network':
-            // Convert IP to number for proper sorting
-            aValue = a.network.split('.').map(n => parseInt(n).toString().padStart(3, '0')).join('.');
-            bValue = b.network.split('.').map(n => parseInt(n).toString().padStart(3, '0')).join('.');
-            break;
-          case 'cidr':
-            aValue = a.cidr;
-            bValue = b.cidr;
-            break;
-          case 'totalHosts':
-            aValue = a.totalHosts;
-            bValue = b.totalHosts;
-            break;
-          case 'usableHosts':
-            aValue = a.usableHosts;
-            bValue = b.usableHosts;
-            break;
-          case 'firstHost':
-            aValue = a.firstHost.split('.').map(n => parseInt(n).toString().padStart(3, '0')).join('.');
-            bValue = b.firstHost.split('.').map(n => parseInt(n).toString().padStart(3, '0')).join('.');
-            break;
-          case 'lastHost':
-            aValue = a.lastHost.split('.').map(n => parseInt(n).toString().padStart(3, '0')).join('.');
-            bValue = b.lastHost.split('.').map(n => parseInt(n).toString().padStart(3, '0')).join('.');
-            break;
-          default:
-            aValue = a.network;
-            bValue = b.network;
-        }
-
-        if (typeof aValue === 'string' && typeof bValue === 'string') {
-          return internalSortOrder === 'asc' 
-            ? aValue.localeCompare(bValue)
-            : bValue.localeCompare(aValue);
-        } else {
-          return internalSortOrder === 'asc' 
-            ? (aValue as number) - (bValue as number)
-            : (bValue as number) - (aValue as number);
-        }
-      });
-    }
-
-    // Then filter the sorted subnets
-    if (!internalFilterText.trim()) {
-      return sorted;
-    }
-
-    const searchTerm = internalFilterText.toLowerCase().trim();
-    return sorted.filter(subnet => 
-      subnet.network.toLowerCase().includes(searchTerm) ||
-      subnet.cidr.toString().includes(searchTerm) ||
-      subnet.firstHost.toLowerCase().includes(searchTerm) ||
-      subnet.lastHost.toLowerCase().includes(searchTerm) ||
-      subnet.broadcast.toLowerCase().includes(searchTerm) ||
-      subnet.usableHosts.toString().includes(searchTerm) ||
-      subnet.totalHosts.toString().includes(searchTerm)
-    );
-  }, [subnets, internalSortBy, internalSortOrder, internalFilterText]);
-
-  // Handle select all/none
-  const handleSelectAll = useCallback((checked: boolean) => {
-    if (checked) {
-      const allIds = new Set(subnets.map(subnet => subnet.id));
-      onSelectionChange(allIds);
-    } else {
-      onSelectionChange(new Set());
-    }
-  }, [subnets, onSelectionChange]);
-
-  // Handle individual subnet selection
-  const handleSubnetSelection = useCallback((subnetId: string, checked: boolean) => {
-    const newSelection = new Set(selectedSubnets);
-    if (checked) {
-      newSelection.add(subnetId);
-    } else {
-      newSelection.delete(subnetId);
-    }
-    onSelectionChange(newSelection);
-  }, [selectedSubnets, onSelectionChange]);
 
   // Enhanced copy subnet functionality with formatted output and feedback
   const handleCopySubnet = useCallback(async (subnet: SplitSubnet) => {
@@ -315,6 +237,97 @@ export function SubnetList({
     }
   }, [onCopySubnet]);
 
+  // Sort and filter subnets
+  const sortedAndFilteredSubnets = useMemo(() => {
+    // First sort the subnets (only if a sort field has been selected)
+    let sorted = [...subnets];
+    
+    if (internalSortBy) {
+      sorted = sorted.sort((a, b) => {
+        let aValue: string | number;
+        let bValue: string | number;
+
+        switch (internalSortBy) {
+          case 'network':
+            // Convert IP to number for proper sorting
+            aValue = a.network.split('.').map(n => parseInt(n).toString().padStart(3, '0')).join('.');
+            bValue = b.network.split('.').map(n => parseInt(n).toString().padStart(3, '0')).join('.');
+            break;
+          case 'cidr':
+            aValue = a.cidr;
+            bValue = b.cidr;
+            break;
+          case 'totalHosts':
+            aValue = a.totalHosts;
+            bValue = b.totalHosts;
+            break;
+          case 'usableHosts':
+            aValue = a.usableHosts;
+            bValue = b.usableHosts;
+            break;
+          case 'firstHost':
+            aValue = a.firstHost.split('.').map(n => parseInt(n).toString().padStart(3, '0')).join('.');
+            bValue = b.firstHost.split('.').map(n => parseInt(n).toString().padStart(3, '0')).join('.');
+            break;
+          case 'lastHost':
+            aValue = a.lastHost.split('.').map(n => parseInt(n).toString().padStart(3, '0')).join('.');
+            bValue = b.lastHost.split('.').map(n => parseInt(n).toString().padStart(3, '0')).join('.');
+            break;
+          default:
+            aValue = a.network;
+            bValue = b.network;
+        }
+
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          return internalSortOrder === 'asc' 
+            ? aValue.localeCompare(bValue)
+            : bValue.localeCompare(aValue);
+        } else {
+          return internalSortOrder === 'asc' 
+            ? (aValue as number) - (bValue as number)
+            : (bValue as number) - (aValue as number);
+        }
+      });
+    }
+
+    // Then filter the sorted subnets
+    if (!internalFilterText.trim()) {
+      return sorted;
+    }
+
+    const searchTerm = internalFilterText.toLowerCase().trim();
+    return sorted.filter(subnet => 
+      subnet.network.toLowerCase().includes(searchTerm) ||
+      subnet.cidr.toString().includes(searchTerm) ||
+      subnet.firstHost.toLowerCase().includes(searchTerm) ||
+      subnet.lastHost.toLowerCase().includes(searchTerm) ||
+      subnet.broadcast.toLowerCase().includes(searchTerm) ||
+      subnet.usableHosts.toString().includes(searchTerm) ||
+      subnet.totalHosts.toString().includes(searchTerm)
+    );
+  }, [subnets, internalSortBy, internalSortOrder, internalFilterText]);
+
+  // Handle select all/none
+  const handleSelectAll = useCallback((checked: boolean) => {
+    if (checked) {
+      const allIds = new Set(subnets.map(subnet => subnet.id));
+      onSelectionChange(allIds);
+    } else {
+      onSelectionChange(new Set());
+    }
+  }, [subnets, onSelectionChange]);
+
+  // Handle individual subnet selection
+  const handleSubnetSelection = useCallback((subnetId: string, checked: boolean) => {
+    const newSelection = new Set(selectedSubnets);
+    if (checked) {
+      newSelection.add(subnetId);
+    } else {
+      newSelection.delete(subnetId);
+    }
+    onSelectionChange(newSelection);
+  }, [selectedSubnets, onSelectionChange]);
+
   // Render sort icon
   const renderSortIcon = (field: SortField) => {
     if (internalSortBy !== field) {
@@ -328,6 +341,30 @@ export function SubnetList({
   // Check if all subnets are selected
   const allSelected = subnets.length > 0 && selectedSubnets.size === subnets.length;
   const someSelected = selectedSubnets.size > 0 && selectedSubnets.size < subnets.length;
+
+  // Use virtual scrolling for large subnet lists
+  if (shouldUseVirtualScrolling) {
+    return (
+      <VirtualSubnetList
+        subnets={subnets}
+        selectedSubnets={selectedSubnets}
+        onSelectionChange={onSelectionChange}
+        onSort={onSort}
+        onFilter={onFilter}
+        onCopySubnet={onCopySubnet}
+        onSubnetDetails={onSubnetDetails}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        filterText={filterText}
+        loading={loading}
+        showSelection={showSelection}
+        showActions={showActions}
+        className={className}
+        enableVirtualization={true}
+        virtualizationThreshold={100}
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -632,4 +669,6 @@ export function SubnetList({
       </CardContent>
     </Card>
   );
-}
+});
+
+SubnetList.displayName = 'SubnetList';

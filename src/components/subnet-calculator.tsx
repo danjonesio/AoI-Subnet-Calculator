@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +20,7 @@ import {
   SubnetOperation,
   SubnetError
 } from "@/lib/types";
+import { debounce, throttle, performanceMonitor, shouldShowPerformanceWarning } from "@/lib/performance";
 import { SubnetSplitter } from "@/components/subnet-management/subnet-splitter";
 import { SubnetJoiner } from "@/components/subnet-management/subnet-joiner";
 import { SubnetTree } from "@/components/subnet-management/subnet-tree";
@@ -133,6 +134,10 @@ export default function SubnetCalculator() {
   const [filterText, setFilterText] = useState<string>('');
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
+  // Performance optimization: debounced validation and calculation
+  const [isValidating, setIsValidating] = useState(false);
+  const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -165,6 +170,78 @@ export default function SubnetCalculator() {
     const provider = CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS];
     return provider ? num >= provider.minCidr && num <= provider.maxCidr : false;
   }, [mode, ipVersion]);
+
+  // Debounced validation functions for real-time input validation
+  const debouncedValidateIP = useCallback(
+    debounce((ip: string) => {
+      setIsValidating(true);
+      const monitor = performanceMonitor.startOperation('ip_validation');
+      
+      try {
+        const isValid = validateIP(ip);
+        if (!isValid && ip.length > 0) {
+          if (ipVersion === "ipv4") {
+            const parts = ip.split(".");
+            if (parts.length !== 4) {
+              setError("IP address must have exactly 4 octets separated by dots");
+            } else if (parts.some(part => part === "" || isNaN(parseInt(part)))) {
+              setError("All IP address octets must be valid numbers");
+            } else if (parts.some(part => parseInt(part) < 0 || parseInt(part) > 255)) {
+              setError("IP address octets must be between 0 and 255");
+            } else {
+              setError("Invalid IP address format");
+            }
+          } else {
+            setError("Invalid IPv6 address format");
+          }
+        } else if (isValid) {
+          setError("");
+        }
+      } catch (error) {
+        console.error('IP validation error:', error);
+        setError("Error validating IP address");
+      } finally {
+        monitor.end();
+        setIsValidating(false);
+      }
+    }, 300),
+    [validateIP, ipVersion]
+  );
+
+  const debouncedValidateCIDR = useCallback(
+    debounce((cidrValue: string) => {
+      setIsValidating(true);
+      const monitor = performanceMonitor.startOperation('cidr_validation');
+      
+      try {
+        const isValid = validateCIDR(cidrValue);
+        if (!isValid && cidrValue.length > 0) {
+          if (ipVersion === "ipv6") {
+            setError("IPv6 CIDR must be between 0 and 128");
+          } else if (mode === "normal") {
+            setError("CIDR must be between 0 and 32");
+          } else {
+            const provider = CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS];
+            if (provider) {
+              const minHosts = Math.pow(2, 32 - provider.maxCidr);
+              setError(`${provider.name} subnets require CIDR between /${provider.minCidr} and /${provider.maxCidr} (minimum ${minHosts} IP addresses)`);
+            }
+          }
+        } else if (isValid) {
+          setError("");
+        }
+      } catch (error) {
+        console.error('CIDR validation error:', error);
+        setError("Error validating CIDR");
+      } finally {
+        monitor.end();
+        setIsValidating(false);
+      }
+    }, 300),
+    [validateCIDR, ipVersion, mode]
+  );
+
+
 
   const ipToInt = (ip: string): number => {
     return ip.split(".").reduce((acc, octet) => (acc << 8) + parseInt(octet), 0) >>> 0;
@@ -682,11 +759,40 @@ export default function SubnetCalculator() {
     }
   }, [ipAddress, cidr, mode, ipVersion, validateCIDR, validateIP]);
 
+  // Throttled calculation function to prevent excessive calculations
+  const throttledCalculateSubnet = useCallback(
+    throttle(() => {
+      if (ipAddress && cidr && !isValidating) {
+        const monitor = performanceMonitor.startOperation('subnet_calculation');
+        monitor.addMetadata({ ipVersion, cloudMode: mode });
+        
+        try {
+          calculateSubnet();
+        } finally {
+          monitor.end();
+        }
+      }
+    }, 500),
+    [calculateSubnet, ipAddress, cidr, isValidating, ipVersion, mode]
+  );
+
+  // Use throttled calculation instead of immediate calculation
   useEffect(() => {
-    if (ipAddress && cidr) {
-      calculateSubnet();
+    if (ipAddress && cidr && !isValidating) {
+      throttledCalculateSubnet();
     }
-  }, [ipAddress, cidr, mode, ipVersion, calculateSubnet]);
+  }, [ipAddress, cidr, mode, ipVersion, throttledCalculateSubnet, isValidating]);
+
+  // Handle input changes with debounced validation
+  const handleIPAddressChange = useCallback((value: string) => {
+    setIpAddress(value);
+    debouncedValidateIP(value);
+  }, [debouncedValidateIP]);
+
+  const handleCIDRChange = useCallback((value: string) => {
+    setCidr(value);
+    debouncedValidateCIDR(value);
+  }, [debouncedValidateCIDR]);
 
   // Reset subnet management when main calculation changes (Task 9.2)
   useEffect(() => {
@@ -842,9 +948,15 @@ export default function SubnetCalculator() {
                 type="text"
                 placeholder={ipVersion === "ipv4" ? "192.168.1.0" : "2001:db8::1"}
                 value={ipAddress}
-                onChange={(e) => setIpAddress(e.target.value)}
+                onChange={(e) => handleIPAddressChange(e.target.value)}
                 className="w-full"
               />
+              {isValidating && (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Validating...
+                </div>
+              )}
             </div>
             <div className="space-y-2 flex-1">
               <Label htmlFor="cidr">CIDR Prefix</Label>
@@ -858,7 +970,7 @@ export default function SubnetCalculator() {
                 }
                 placeholder={ipVersion === "ipv4" ? "24" : "64"}
                 value={cidr}
-                onChange={(e) => setCidr(e.target.value)}
+                onChange={(e) => handleCIDRChange(e.target.value)}
                 className="w-full"
               />
             </div>

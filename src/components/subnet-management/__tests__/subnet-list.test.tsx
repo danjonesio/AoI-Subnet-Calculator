@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { SubnetList } from '../subnet-list';
 import { SplitSubnet } from '@/lib/types';
@@ -93,7 +93,7 @@ describe('SubnetList', () => {
     expect(screen.getByText('No subnets to display')).toBeInTheDocument();
   });
 
-  it('handles search/filter functionality', () => {
+  it('handles search/filter functionality', async () => {
     render(
       <SubnetList
         subnets={mockSubnets}
@@ -105,6 +105,9 @@ describe('SubnetList', () => {
 
     const searchInput = screen.getByPlaceholderText('Search subnets by network, CIDR, or host range...');
     fireEvent.change(searchInput, { target: { value: '192.168.1.0' } });
+
+    // Wait for debounced function to be called (300ms + buffer)
+    await new Promise(resolve => setTimeout(resolve, 350));
 
     expect(mockOnFilter).toHaveBeenCalledWith('192.168.1.0');
   });
@@ -182,10 +185,12 @@ describe('SubnetList', () => {
 
     // Find and click the first copy button
     const copyButtons = screen.getAllByTitle('Copy subnet information');
-    fireEvent.click(copyButtons[0]);
-
-    // Wait for the async operation to complete
-    await new Promise(resolve => setTimeout(resolve, 0));
+    
+    await act(async () => {
+      fireEvent.click(copyButtons[0]);
+      // Wait for the async operation to complete
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
 
     // Verify clipboard was called with formatted subnet information
     expect(mockWriteText).toHaveBeenCalledWith(
@@ -222,13 +227,17 @@ describe('SubnetList', () => {
 
     // Find and click the first copy button
     const copyButtons = screen.getAllByTitle('Copy subnet information');
-    fireEvent.click(copyButtons[0]);
-
-    // Wait for the async operation to complete
-    await new Promise(resolve => setTimeout(resolve, 0));
+    
+    await act(async () => {
+      fireEvent.click(copyButtons[0]);
+      // Wait for the async operation to complete
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
 
     // Check for success feedback
-    expect(screen.getByText(/Subnet 192\.168\.1\.0\/25 information copied to clipboard/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/Subnet 192\.168\.1\.0\/25 information copied to clipboard/)).toBeInTheDocument();
+    });
   });
 
   it('handles copy failure gracefully', async () => {
@@ -245,12 +254,16 @@ describe('SubnetList', () => {
 
     // Find and click the first copy button
     const copyButtons = screen.getAllByTitle('Copy subnet information');
-    fireEvent.click(copyButtons[0]);
-
-    // Wait for the async operation to complete
-    await new Promise(resolve => setTimeout(resolve, 0));
+    
+    await act(async () => {
+      fireEvent.click(copyButtons[0]);
+      // Wait for the async operation to complete
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
 
     // Should show error feedback
-    expect(screen.getByText(/Failed to copy subnet: Clipboard not available/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to copy subnet: Clipboard not available/)).toBeInTheDocument();
+    });
   });
 });

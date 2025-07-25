@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, memo } from 'react';
 import {
   Card,
   CardContent,
@@ -240,7 +240,7 @@ Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
   );
 }
 
-export function SubnetTree({
+const SubnetTree = memo<SubnetTreeProps>(({
   subnets,
   selectedSubnets,
   onSelectionChange,
@@ -255,7 +255,7 @@ export function SubnetTree({
   showSelection = true,
   showActions = true,
   className = ''
-}: SubnetTreeProps) {
+}) => {
   const [internalExpandedNodes, setInternalExpandedNodes] = useState<Set<string>>(expandedNodes);
   const [internalFilterText, setInternalFilterText] = useState<string>(filterText);
 
@@ -566,4 +566,8 @@ export function SubnetTree({
       </CardContent>
     </Card>
   );
-}
+});
+
+SubnetTree.displayName = 'SubnetTree';
+
+export { SubnetTree };
