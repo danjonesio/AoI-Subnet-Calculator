@@ -22,6 +22,7 @@ import {
 import { SubnetSplitter } from "@/components/subnet-management/subnet-splitter";
 import { SubnetJoiner } from "@/components/subnet-management/subnet-joiner";
 import { SubnetTree } from "@/components/subnet-management/subnet-tree";
+import { SubnetExport } from "@/components/subnet-management/subnet-export";
 
 interface CloudReservation {
   ip: string;
@@ -1047,6 +1048,23 @@ Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
               showSelection={true}
               showActions={true}
               loading={isSubnetLoading}
+            />
+          )}
+
+          {/* Subnet Export Functionality */}
+          {splitSubnets.length > 0 && (
+            <SubnetExport
+              subnets={splitSubnets}
+              selectedSubnets={selectedSubnets}
+              onExport={(result) => {
+                // Optional: Add success feedback or logging
+                console.log('Export completed:', result.filename, result.size, 'bytes');
+              }}
+              onError={(error) => {
+                setSubnetError(error.message);
+              }}
+              availableFormats={['text', 'csv', 'json']}
+              className="mt-4"
             />
           )}
         </>

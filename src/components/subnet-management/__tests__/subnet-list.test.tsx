@@ -40,6 +40,14 @@ describe('SubnetList', () => {
   const mockOnFilter = jest.fn();
   const mockOnCopySubnet = jest.fn();
 
+  // Mock clipboard API
+  const mockWriteText = jest.fn();
+  Object.assign(navigator, {
+    clipboard: {
+      writeText: mockWriteText,
+    },
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -156,5 +164,91 @@ describe('SubnetList', () => {
     );
 
     expect(screen.getByText('No subnets match your search criteria')).toBeInTheDocument();
+  });
+
+  it('handles copy subnet functionality', async () => {
+    mockWriteText.mockResolvedValue(undefined);
+
+    render(
+      <SubnetList
+        subnets={mockSubnets}
+        selectedSubnets={new Set()}
+        onSelectionChange={mockOnSelectionChange}
+        onCopySubnet={mockOnCopySubnet}
+      />
+    );
+
+    // Find and click the first copy button
+    const copyButtons = screen.getAllByTitle('Copy subnet information');
+    fireEvent.click(copyButtons[0]);
+
+    // Wait for the async operation to complete
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // Verify clipboard was called with formatted subnet information
+    expect(mockWriteText).toHaveBeenCalledWith(
+      expect.stringContaining('Subnet Information')
+    );
+    expect(mockWriteText).toHaveBeenCalledWith(
+      expect.stringContaining('Network Address:    192.168.1.0/25')
+    );
+    expect(mockWriteText).toHaveBeenCalledWith(
+      expect.stringContaining('Broadcast Address:  192.168.1.127')
+    );
+    expect(mockWriteText).toHaveBeenCalledWith(
+      expect.stringContaining('First Host IP:      192.168.1.1')
+    );
+    expect(mockWriteText).toHaveBeenCalledWith(
+      expect.stringContaining('Last Host IP:       192.168.1.126')
+    );
+
+    // Verify the callback was called
+    expect(mockOnCopySubnet).toHaveBeenCalledWith(mockSubnets[0]);
+  });
+
+  it('shows success feedback after copying subnet', async () => {
+    mockWriteText.mockResolvedValue(undefined);
+
+    render(
+      <SubnetList
+        subnets={mockSubnets}
+        selectedSubnets={new Set()}
+        onSelectionChange={mockOnSelectionChange}
+        onCopySubnet={mockOnCopySubnet}
+      />
+    );
+
+    // Find and click the first copy button
+    const copyButtons = screen.getAllByTitle('Copy subnet information');
+    fireEvent.click(copyButtons[0]);
+
+    // Wait for the async operation to complete
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // Check for success feedback
+    expect(screen.getByText(/Subnet 192\.168\.1\.0\/25 information copied to clipboard/)).toBeInTheDocument();
+  });
+
+  it('handles copy failure gracefully', async () => {
+    mockWriteText.mockRejectedValue(new Error('Clipboard not available'));
+
+    render(
+      <SubnetList
+        subnets={mockSubnets}
+        selectedSubnets={new Set()}
+        onSelectionChange={mockOnSelectionChange}
+        onCopySubnet={mockOnCopySubnet}
+      />
+    );
+
+    // Find and click the first copy button
+    const copyButtons = screen.getAllByTitle('Copy subnet information');
+    fireEvent.click(copyButtons[0]);
+
+    // Wait for the async operation to complete
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // Should show error feedback
+    expect(screen.getByText(/Failed to copy subnet: Clipboard not available/)).toBeInTheDocument();
   });
 });
