@@ -49,6 +49,16 @@ A professional subnet calculator built with Next.js and shadcn/ui for network en
 
 4. Open [http://localhost:3000](http://localhost:3000) in your browser
 
+### Testing
+
+To run the test suite:
+
+```bash
+npm test
+```
+
+The project includes comprehensive tests for subnet calculation functions, including IPv4 and IPv6 subnet splitting and joining operations.
+
 ### Building for Production
 
 To build the static export for deployment:

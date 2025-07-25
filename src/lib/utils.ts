@@ -466,3 +466,351 @@ export function getIPv6SubnetSummary(ipv6: string, prefixLength: number): {
     addressType
   };
 }
+
+// Subnet management utility functions
+
+/**
+ * Generates a unique identifier for subnets
+ * Uses timestamp and random component for uniqueness
+ */
+export function generateSubnetId(): string {
+  const timestamp = Date.now().toString(36);
+  const randomPart = Math.random().toString(36).substring(2, 8);
+  return `subnet_${timestamp}_${randomPart}`;
+}
+
+/**
+ * Generates a unique identifier for subnet operations
+ * Uses timestamp and operation type for uniqueness
+ */
+export function generateOperationId(operationType: string): string {
+  const timestamp = Date.now().toString(36);
+  const randomPart = Math.random().toString(36).substring(2, 6);
+  return `op_${operationType}_${timestamp}_${randomPart}`;
+}
+
+/**
+ * Validates a subnet ID format
+ * Ensures the ID follows the expected pattern
+ */
+export function validateSubnetId(id: string): boolean {
+  if (!id || typeof id !== 'string') {
+    return false;
+  }
+  
+  // Check for basic subnet ID pattern: subnet_[timestamp]_[random]
+  const subnetIdPattern = /^subnet_[a-z0-9]+_[a-z0-9]+$/;
+  return subnetIdPattern.test(id);
+}
+
+/**
+ * Validates an operation ID format
+ * Ensures the ID follows the expected pattern
+ */
+export function validateOperationId(id: string): boolean {
+  if (!id || typeof id !== 'string') {
+    return false;
+  }
+  
+  // Check for basic operation ID pattern: op_[type]_[timestamp]_[random]
+  const operationIdPattern = /^op_[a-z]+_[a-z0-9]+_[a-z0-9]+$/;
+  return operationIdPattern.test(id);
+}
+
+/**
+ * Validates CIDR notation for both IPv4 and IPv6
+ * Returns detailed validation result with specific error messages
+ */
+export function validateCIDRNotation(cidr: string, ipVersion: 'ipv4' | 'ipv6' = 'ipv4'): {
+  isValid: boolean;
+  error?: string;
+  normalizedCidr?: number;
+} {
+  if (!cidr || typeof cidr !== 'string') {
+    return { isValid: false, error: 'CIDR is required' };
+  }
+
+  // Remove leading slash if present
+  const cleanCidr = cidr.replace(/^\//, '');
+  const cidrNum = parseInt(cleanCidr, 10);
+
+  if (isNaN(cidrNum)) {
+    return { isValid: false, error: 'CIDR must be a valid number' };
+  }
+
+  if (ipVersion === 'ipv4') {
+    if (cidrNum < 0 || cidrNum > 32) {
+      return { isValid: false, error: 'IPv4 CIDR must be between 0 and 32' };
+    }
+  } else if (ipVersion === 'ipv6') {
+    if (cidrNum < 0 || cidrNum > 128) {
+      return { isValid: false, error: 'IPv6 CIDR must be between 0 and 128' };
+    }
+  }
+
+  return { isValid: true, normalizedCidr: cidrNum };
+}
+
+/**
+ * Validates subnet adjacency for joining operations
+ * Checks if subnets are adjacent in the address space
+ */
+export function validateSubnetAdjacency(subnets: Array<{
+  network: string;
+  cidr: number;
+  ipVersion: 'ipv4' | 'ipv6';
+}>): {
+  isValid: boolean;
+  errors: string[];
+  canJoin: boolean;
+} {
+  const errors: string[] = [];
+  
+  if (!subnets || subnets.length < 2) {
+    return {
+      isValid: false,
+      errors: ['At least 2 subnets are required for joining'],
+      canJoin: false
+    };
+  }
+
+  // Check if all subnets have the same CIDR (same size)
+  const firstCidr = subnets[0].cidr;
+  const sameSizeCidr = subnets.every(subnet => subnet.cidr === firstCidr);
+  
+  if (!sameSizeCidr) {
+    errors.push('All subnets must be the same size (same CIDR) to be joined');
+  }
+
+  // Check if all subnets are the same IP version
+  const firstIpVersion = subnets[0].ipVersion;
+  const sameIpVersion = subnets.every(subnet => subnet.ipVersion === firstIpVersion);
+  
+  if (!sameIpVersion) {
+    errors.push('All subnets must be the same IP version');
+  }
+
+  // For IPv4 adjacency validation
+  if (firstIpVersion === 'ipv4' && sameSizeCidr) {
+    try {
+      const sortedSubnets = [...subnets].sort((a, b) => {
+        const aInt = ipv4ToInt(a.network);
+        const bInt = ipv4ToInt(b.network);
+        return aInt - bInt;
+      });
+
+      const subnetSize = Math.pow(2, 32 - firstCidr);
+      
+      for (let i = 1; i < sortedSubnets.length; i++) {
+        const prevNetworkInt = ipv4ToInt(sortedSubnets[i - 1].network);
+        const currentNetworkInt = ipv4ToInt(sortedSubnets[i].network);
+        
+        if (currentNetworkInt !== prevNetworkInt + subnetSize) {
+          errors.push(`Subnets ${sortedSubnets[i - 1].network}/${firstCidr} and ${sortedSubnets[i].network}/${firstCidr} are not adjacent`);
+        }
+      }
+    } catch {
+      errors.push('Error validating IPv4 subnet adjacency');
+    }
+  }
+
+  // For IPv6 adjacency validation
+  if (firstIpVersion === 'ipv6' && sameSizeCidr) {
+    try {
+      const sortedSubnets = [...subnets].sort((a, b) => {
+        const aBigInt = ipv6ToBigInt(a.network);
+        const bBigInt = ipv6ToBigInt(b.network);
+        return aBigInt < bBigInt ? -1 : aBigInt > bBigInt ? 1 : 0;
+      });
+
+      const subnetSize = 2n ** BigInt(128 - firstCidr);
+      
+      for (let i = 1; i < sortedSubnets.length; i++) {
+        const prevNetworkBigInt = ipv6ToBigInt(sortedSubnets[i - 1].network);
+        const currentNetworkBigInt = ipv6ToBigInt(sortedSubnets[i].network);
+        
+        if (currentNetworkBigInt !== prevNetworkBigInt + subnetSize) {
+          errors.push(`Subnets ${sortedSubnets[i - 1].network}/${firstCidr} and ${sortedSubnets[i].network}/${firstCidr} are not adjacent`);
+        }
+      }
+    } catch {
+      errors.push('Error validating IPv6 subnet adjacency');
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    canJoin: errors.length === 0 && subnets.length >= 2
+  };
+}
+
+/**
+ * Helper function to convert IPv4 address to integer
+ * Used for adjacency calculations
+ */
+function ipv4ToInt(ip: string): number {
+  return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+}
+
+
+
+/**
+ * Validates subnet split configuration
+ * Ensures split parameters are valid and feasible
+ */
+export function validateSplitConfiguration(
+  parentCidr: number,
+  targetCidr: number,
+  ipVersion: 'ipv4' | 'ipv6' = 'ipv4',
+  maxSubnets: number = 1000,
+  allowMaxResultsOverride: boolean = false
+): {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+  resultingSubnets?: number;
+} {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  // Basic CIDR validation
+  const maxCidr = ipVersion === 'ipv4' ? 32 : 128;
+  
+  if (parentCidr < 0 || parentCidr > maxCidr) {
+    errors.push(`Parent CIDR must be between 0 and ${maxCidr}`);
+  }
+  
+  if (targetCidr < 0 || targetCidr > maxCidr) {
+    errors.push(`Target CIDR must be between 0 and ${maxCidr}`);
+  }
+
+  // Split feasibility validation
+  if (targetCidr <= parentCidr) {
+    errors.push('Target CIDR must be more specific (larger number) than parent CIDR');
+  }
+
+  let resultingSubnets = 0;
+  if (errors.length === 0) {
+    const cidrDifference = targetCidr - parentCidr;
+    resultingSubnets = Math.pow(2, cidrDifference);
+
+    // Performance warnings
+    if (resultingSubnets > maxSubnets) {
+      if (allowMaxResultsOverride) {
+        warnings.push(`Split will create ${resultingSubnets} subnets, exceeding recommended maximum of ${maxSubnets}`);
+      } else {
+        errors.push(`Split would create ${resultingSubnets} subnets, exceeding maximum of ${maxSubnets}`);
+      }
+    } else if (resultingSubnets > 100) {
+      warnings.push(`Split will create ${resultingSubnets} subnets, which may impact performance`);
+    }
+
+    // IPv4 specific validations
+    if (ipVersion === 'ipv4' && targetCidr > 30) {
+      warnings.push('Very small subnets (>/30) may have limited practical use');
+    }
+
+    // IPv6 specific validations
+    if (ipVersion === 'ipv6' && targetCidr > 64) {
+      warnings.push('IPv6 subnets larger than /64 may not be suitable for SLAAC');
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    warnings,
+    resultingSubnets: errors.length === 0 ? resultingSubnets : undefined
+  };
+}
+
+/**
+ * Formats subnet information for display
+ * Provides consistent formatting across components
+ */
+export function formatSubnetInfo(subnet: {
+  network: string;
+  cidr: number;
+  totalHosts: number;
+  usableHosts: number;
+  ipVersion: 'ipv4' | 'ipv6';
+}): {
+  networkDisplay: string;
+  cidrDisplay: string;
+  hostsDisplay: string;
+  usableHostsDisplay: string;
+} {
+  const networkDisplay = subnet.ipVersion === 'ipv6' 
+    ? compressIPv6(subnet.network)
+    : subnet.network;
+
+  const cidrDisplay = `/${subnet.cidr}`;
+  
+  const hostsDisplay = subnet.totalHosts > Number.MAX_SAFE_INTEGER
+    ? formatIPv6AddressCount(BigInt(subnet.totalHosts))
+    : subnet.totalHosts.toLocaleString();
+
+  const usableHostsDisplay = subnet.usableHosts > Number.MAX_SAFE_INTEGER
+    ? formatIPv6AddressCount(BigInt(subnet.usableHosts))
+    : subnet.usableHosts.toLocaleString();
+
+  return {
+    networkDisplay,
+    cidrDisplay,
+    hostsDisplay,
+    usableHostsDisplay
+  };
+}
+
+/**
+ * Calculates performance metrics for subnet operations
+ * Helps monitor and optimize performance
+ */
+export function calculatePerformanceMetrics(
+  startTime: number,
+  endTime: number,
+  itemsProcessed: number,
+  operationType: string
+): {
+  duration: number;
+  itemsPerSecond: number;
+  performanceRating: 'excellent' | 'good' | 'fair' | 'poor';
+  recommendations: string[];
+} {
+  const duration = endTime - startTime;
+  const itemsPerSecond = itemsProcessed / (duration / 1000);
+  
+  let performanceRating: 'excellent' | 'good' | 'fair' | 'poor';
+  const recommendations: string[] = [];
+
+  // Performance thresholds (operations per second)
+  if (itemsPerSecond > 1000) {
+    performanceRating = 'excellent';
+  } else if (itemsPerSecond > 100) {
+    performanceRating = 'good';
+  } else if (itemsPerSecond > 10) {
+    performanceRating = 'fair';
+    recommendations.push('Consider reducing the number of subnets for better performance');
+  } else {
+    performanceRating = 'poor';
+    recommendations.push('Large subnet operations detected - consider splitting into smaller batches');
+    recommendations.push('Enable virtual scrolling for better UI responsiveness');
+  }
+
+  // Operation-specific recommendations
+  if (operationType === 'split' && itemsProcessed > 500) {
+    recommendations.push('Consider using progressive calculation for large splits');
+  }
+
+  if (duration > 5000) { // 5 seconds
+    recommendations.push('Operation took longer than expected - check system resources');
+  }
+
+  return {
+    duration,
+    itemsPerSecond: Math.round(itemsPerSecond),
+    performanceRating,
+    recommendations
+  };
+}

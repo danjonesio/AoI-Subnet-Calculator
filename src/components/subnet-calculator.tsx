@@ -12,10 +12,16 @@ import { Github, Newspaper } from "lucide-react";
 import { useTheme } from "next-themes";
 import Image from "next/image";
 import { validateIPv6, compressIPv6, validateIPv6CIDR, calculateIPv6Subnet, getIPv6SubnetSummary } from "@/lib/utils";
-
-// Types
-type CloudMode = "normal" | "aws" | "azure" | "gcp";
-type IPVersion = "ipv4" | "ipv6";
+import { 
+  CloudMode, 
+  IPVersion, 
+  SplitSubnet, 
+  SubnetOperation,
+  SubnetError
+} from "@/lib/types";
+import { SubnetSplitter } from "@/components/subnet-management/subnet-splitter";
+import { SubnetJoiner } from "@/components/subnet-management/subnet-joiner";
+import { SubnetTree } from "@/components/subnet-management/subnet-tree";
 
 interface CloudReservation {
   ip: string;
@@ -109,6 +115,21 @@ export default function SubnetCalculator() {
   const [mounted, setMounted] = useState(false);
   const { theme } = useTheme();
 
+  // Subnet Management State - Enhanced for advanced subnet management
+  const [splitSubnets, setSplitSubnets] = useState<SplitSubnet[]>([]);
+  const [selectedSubnets, setSelectedSubnets] = useState<Set<string>>(new Set());
+  const [splitHistory, setSplitHistory] = useState<SubnetOperation[]>([]);
+  const [isSubnetLoading, setIsSubnetLoading] = useState(false);
+  const [subnetError, setSubnetError] = useState<string | null>(null);
+  
+  // Additional state for enhanced subnet management
+  const [originalSubnet, setOriginalSubnet] = useState<SubnetInfo | null>(null);
+  const [currentView, setCurrentView] = useState<'list' | 'tree'>('list');
+  const [sortBy, setSortBy] = useState<'network' | 'cidr' | 'hosts' | 'created'>('network');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [filterText, setFilterText] = useState<string>('');
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -154,6 +175,192 @@ export default function SubnetCalculator() {
       int & 255
     ].join(".");
   };
+
+  // Subnet Management State Update Functions - Enhanced for task 4.2
+  const addSplitSubnets = useCallback((newSubnets: SplitSubnet[], operation: SubnetOperation) => {
+    setIsSubnetLoading(true);
+    try {
+      if (operation.type === 'split') {
+        // For split operations, replace existing subnets to avoid duplicates
+        // This handles the case where user clicks "Split Subnets" multiple times
+        setSplitSubnets(newSubnets);
+        // Clear selection since we're replacing all subnets
+        setSelectedSubnets(new Set());
+      } else {
+        // For other operations (like join results), append to existing
+        setSplitSubnets(prev => [...prev, ...newSubnets]);
+      }
+      setSplitHistory(prev => [...prev, operation]);
+      setSubnetError(null);
+    } catch (error) {
+      setSubnetError(error instanceof Error ? error.message : 'Failed to add split subnets');
+    } finally {
+      setIsSubnetLoading(false);
+    }
+  }, []);
+
+  const removeSubnets = useCallback((subnetIds: string[], operation: SubnetOperation) => {
+    setIsSubnetLoading(true);
+    try {
+      setSplitSubnets(prev => prev.filter(subnet => !subnetIds.includes(subnet.id)));
+      setSelectedSubnets(prev => {
+        const newSelected = new Set(prev);
+        subnetIds.forEach(id => newSelected.delete(id));
+        return newSelected;
+      });
+      setSplitHistory(prev => [...prev, operation]);
+      setSubnetError(null);
+    } catch (error) {
+      setSubnetError(error instanceof Error ? error.message : 'Failed to remove subnets');
+    } finally {
+      setIsSubnetLoading(false);
+    }
+  }, []);
+
+  const toggleSubnetSelection = useCallback((subnetId: string) => {
+    try {
+      setSelectedSubnets(prev => {
+        const newSelected = new Set(prev);
+        if (newSelected.has(subnetId)) {
+          newSelected.delete(subnetId);
+        } else {
+          newSelected.add(subnetId);
+        }
+        return newSelected;
+      });
+    } catch (error) {
+      setSubnetError(error instanceof Error ? error.message : 'Failed to toggle subnet selection');
+    }
+  }, []);
+
+  const resetSubnetManagement = useCallback(() => {
+    try {
+      setSplitSubnets([]);
+      setSelectedSubnets(new Set());
+      setSplitHistory([]);
+      setIsSubnetLoading(false);
+      setSubnetError(null);
+      setOriginalSubnet(null);
+      setCurrentView('list');
+      setSortBy('network');
+      setSortOrder('asc');
+      setFilterText('');
+      setExpandedNodes(new Set());
+    } catch (error) {
+      console.error('Error resetting subnet management:', error);
+      setSubnetError('Failed to reset subnet management');
+    }
+  }, []);
+
+  // Additional state management functions for enhanced functionality
+  const updateSubnetSelection = useCallback((subnetIds: string[], selected: boolean) => {
+    try {
+      setSelectedSubnets(prev => {
+        const newSelected = new Set(prev);
+        subnetIds.forEach(id => {
+          if (selected) {
+            newSelected.add(id);
+          } else {
+            newSelected.delete(id);
+          }
+        });
+        return newSelected;
+      });
+    } catch (error) {
+      setSubnetError(error instanceof Error ? error.message : 'Failed to update subnet selection');
+    }
+  }, []);
+
+  const selectAllSubnets = useCallback(() => {
+    try {
+      const allSubnetIds = splitSubnets.map(subnet => subnet.id);
+      setSelectedSubnets(new Set(allSubnetIds));
+    } catch (error) {
+      setSubnetError(error instanceof Error ? error.message : 'Failed to select all subnets');
+    }
+  }, [splitSubnets]);
+
+  const clearSubnetSelection = useCallback(() => {
+    try {
+      setSelectedSubnets(new Set());
+    } catch (error) {
+      setSubnetError(error instanceof Error ? error.message : 'Failed to clear subnet selection');
+    }
+  }, []);
+
+  const updateSubnetView = useCallback((view: 'list' | 'tree') => {
+    try {
+      setCurrentView(view);
+    } catch (error) {
+      setSubnetError(error instanceof Error ? error.message : 'Failed to update view');
+    }
+  }, []);
+
+  const updateSubnetSort = useCallback((field: 'network' | 'cidr' | 'hosts' | 'created', order: 'asc' | 'desc') => {
+    try {
+      setSortBy(field);
+      setSortOrder(order);
+    } catch (error) {
+      setSubnetError(error instanceof Error ? error.message : 'Failed to update sort');
+    }
+  }, []);
+
+  const updateSubnetFilter = useCallback((filter: string) => {
+    try {
+      setFilterText(filter);
+    } catch (error) {
+      setSubnetError(error instanceof Error ? error.message : 'Failed to update filter');
+    }
+  }, []);
+
+  const toggleNodeExpansion = useCallback((nodeId: string) => {
+    try {
+      setExpandedNodes(prev => {
+        const newExpanded = new Set(prev);
+        if (newExpanded.has(nodeId)) {
+          newExpanded.delete(nodeId);
+        } else {
+          newExpanded.add(nodeId);
+        }
+        return newExpanded;
+      });
+    } catch (error) {
+      setSubnetError(error instanceof Error ? error.message : 'Failed to toggle node expansion');
+    }
+  }, []);
+
+  const undoLastOperation = useCallback(() => {
+    try {
+      if (splitHistory.length === 0) {
+        setSubnetError('No operations to undo');
+        return;
+      }
+
+      const lastOperation = splitHistory[splitHistory.length - 1];
+      
+      // Remove the last operation from history
+      setSplitHistory(prev => prev.slice(0, -1));
+      
+      // Reverse the operation based on its type
+      if (lastOperation.type === 'split') {
+        // Remove the subnets that were added by the split
+        const subnetIdsToRemove = lastOperation.resultSubnets.map(subnet => subnet.id);
+        setSplitSubnets(prev => prev.filter(subnet => !subnetIdsToRemove.includes(subnet.id)));
+        setSelectedSubnets(prev => {
+          const newSelected = new Set(prev);
+          subnetIdsToRemove.forEach(id => newSelected.delete(id));
+          return newSelected;
+        });
+      } else if (lastOperation.type === 'join') {
+        // Add back the subnets that were removed by the join
+        setSplitSubnets(prev => [...prev, ...lastOperation.resultSubnets]);
+      }
+      
+      setSubnetError(null);
+    } catch (error) {
+      setSubnetError(error instanceof Error ? error.message : 'Failed to undo operation');
+    }
+  }, [splitHistory]);
 
   const calculateSubnet = useCallback(() => {
     try {
@@ -215,7 +422,7 @@ export default function SubnetCalculator() {
         const compressedFirstHost = compressIPv6(ipv6Subnet.firstHost);
         const compressedLastHost = compressIPv6(ipv6Subnet.lastHost);
 
-        setSubnetInfo({
+        const calculatedIPv6Subnet = {
           network: compressedNetwork,
           broadcast: "N/A (IPv6 has no broadcast address)",
           firstHost: compressedFirstHost,
@@ -232,7 +439,10 @@ export default function SubnetCalculator() {
             totalAddressesFormatted: ipv6Summary.totalAddresses,
             usableAddressesFormatted: ipv6Summary.usableAddresses
           }
-        });
+        };
+
+        setSubnetInfo(calculatedIPv6Subnet);
+        setOriginalSubnet(calculatedIPv6Subnet); // Store original subnet for reset functionality
         return;
       }
 
@@ -438,7 +648,7 @@ export default function SubnetCalculator() {
           throw new Error("Failed to convert calculated addresses to IP format");
         }
 
-        setSubnetInfo({
+        const calculatedSubnet = {
           network: networkAddress,
           broadcast: broadcastAddress,
           firstHost: firstHostDisplay,
@@ -449,7 +659,10 @@ export default function SubnetCalculator() {
           usableHosts: Math.floor(Math.min(usableHosts, Number.MAX_SAFE_INTEGER)), // Ensure safe integer
           cidr: `/${cidr}`,
           cloudReserved
-        });
+        };
+
+        setSubnetInfo(calculatedSubnet);
+        setOriginalSubnet(calculatedSubnet); // Store original subnet for reset functionality
 
       } catch (finalError) {
         console.error("Final validation error:", finalError);
@@ -471,6 +684,11 @@ export default function SubnetCalculator() {
       calculateSubnet();
     }
   }, [ipAddress, cidr, mode, ipVersion, calculateSubnet]);
+
+  // Reset subnet management when main calculation changes
+  useEffect(() => {
+    resetSubnetManagement();
+  }, [ipAddress, cidr, mode, ipVersion, resetSubnetManagement]);
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
@@ -760,6 +978,76 @@ export default function SubnetCalculator() {
                 </Table>
               </CardContent>
             </Card>
+          )}
+
+          {/* Subnet Management Section */}
+          {subnetInfo && ipVersion === "ipv4" && (
+            <SubnetSplitter
+              parentSubnet={{
+                ...subnetInfo,
+                id: subnetInfo.network + subnetInfo.cidr,
+                level: 0
+              }}
+              ipVersion={ipVersion}
+              cloudMode={mode as CloudMode}
+              onSplit={addSplitSubnets}
+              onError={(error: SubnetError) => setSubnetError(error.message)}
+              disabled={isSubnetLoading}
+              maxSubnets={1000}
+            />
+          )}
+
+          {/* Subnet Joiner Section */}
+          {splitSubnets.length > 0 && ipVersion === "ipv4" && (
+            <SubnetJoiner
+              availableSubnets={splitSubnets}
+              selectedSubnets={selectedSubnets}
+              ipVersion={ipVersion}
+              onSelectionChange={setSelectedSubnets}
+              onJoin={(joinedSubnet, operation) => {
+                // Remove the joined subnets from the list
+                const subnetIdsToRemove = operation.sourceSubnets;
+                removeSubnets(subnetIdsToRemove, operation);
+                
+                // Add the new joined subnet
+                addSplitSubnets([joinedSubnet], {
+                  ...operation,
+                  type: 'join',
+                  resultSubnets: [joinedSubnet]
+                });
+              }}
+              onError={(error: SubnetError) => setSubnetError(error.message)}
+              disabled={isSubnetLoading}
+            />
+          )}
+
+          {/* Subnet Hierarchy Visualization */}
+          {splitSubnets.length > 0 && (
+            <SubnetTree
+              subnets={splitSubnets}
+              selectedSubnets={selectedSubnets}
+              onSelectionChange={setSelectedSubnets}
+              onCopySubnet={async (subnet) => {
+                try {
+                  const subnetInfo = `Network: ${subnet.network}/${subnet.cidr}
+Broadcast: ${subnet.broadcast}
+First Host: ${subnet.firstHost}
+Last Host: ${subnet.lastHost}
+Total Hosts: ${subnet.totalHosts.toLocaleString()}
+Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
+                  
+                  await navigator.clipboard.writeText(subnetInfo);
+                  // Could add a toast notification here in the future
+                } catch (error) {
+                  console.error('Failed to copy subnet information:', error);
+                  setSubnetError('Failed to copy subnet information to clipboard');
+                }
+              }}
+              showRelationships={true}
+              showSelection={true}
+              showActions={true}
+              loading={isSubnetLoading}
+            />
           )}
         </>
       )}
