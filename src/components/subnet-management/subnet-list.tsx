@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback, memo } from 'react';
+import React, { useState, useMemo, useCallback, memo, useRef, useEffect } from 'react';
 import {
   Table,
   TableBody,
@@ -31,12 +31,14 @@ import {
   Info,
   Loader2,
   Search,
-  X
+  X,
+  Keyboard
 } from 'lucide-react';
 import { SplitSubnet } from '@/lib/types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { VirtualSubnetList } from './virtual-subnet-list';
 import { debounce } from '@/lib/performance';
+import { useKeyboardNavigation, formatKeyboardShortcut } from '@/lib/keyboard-navigation';
 
 interface SubnetListProps {
   subnets: SplitSubnet[];
@@ -84,6 +86,29 @@ export const SubnetList = memo<SubnetListProps>(({
     message: string;
     subnetId: string;
   } | null>(null);
+
+  // Keyboard navigation setup
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+  const [focusedSubnetIndex, setFocusedSubnetIndex] = useState<number>(-1);
+
+  // Set up keyboard navigation for the main component
+  const {
+    registerShortcut,
+    unregisterShortcut,
+    getShortcuts,
+    focusFirst,
+    restoreFocus
+  } = useKeyboardNavigation(containerRef, {
+    enableArrowKeys: true,
+    enableTabNavigation: true,
+    enableShortcuts: true,
+    enableEscapeHandling: true,
+    enableEnterHandling: true,
+    enableSpaceHandling: true,
+    trapFocus: false,
+    autoFocus: false
+  });
 
   // Determine if we should use virtual scrolling based on subnet count
   const shouldUseVirtualScrolling = subnets.length > 100;
@@ -342,6 +367,162 @@ export const SubnetList = memo<SubnetListProps>(({
   const allSelected = subnets.length > 0 && selectedSubnets.size === subnets.length;
   const someSelected = selectedSubnets.size > 0 && selectedSubnets.size < subnets.length;
 
+  // Register keyboard shortcuts
+  useEffect(() => {
+    // Select all shortcut
+    registerShortcut({
+      key: 'a',
+      ctrlKey: true,
+      action: () => {
+        if (showSelection) {
+          handleSelectAll(!allSelected);
+        }
+      },
+      description: 'Select/deselect all subnets',
+      category: 'Selection'
+    });
+
+    // Focus search field
+    registerShortcut({
+      key: 'f',
+      ctrlKey: true,
+      action: () => {
+        const searchInput = containerRef.current?.querySelector('input[type="text"]') as HTMLInputElement;
+        searchInput?.focus();
+      },
+      description: 'Focus search field',
+      category: 'Navigation'
+    });
+
+    // Clear search
+    registerShortcut({
+      key: 'Escape',
+      action: () => {
+        if (showKeyboardHelp) {
+          setShowKeyboardHelp(false);
+        } else if (internalFilterText) {
+          clearFilter();
+        } else if (selectedSubnets.size > 0) {
+          onSelectionChange(new Set());
+        }
+      },
+      description: 'Clear search or selection',
+      category: 'Navigation'
+    });
+
+    // Copy focused subnet
+    registerShortcut({
+      key: 'c',
+      ctrlKey: true,
+      action: () => {
+        if (focusedSubnetIndex >= 0 && focusedSubnetIndex < sortedAndFilteredSubnets.length) {
+          const subnet = sortedAndFilteredSubnets[focusedSubnetIndex];
+          handleCopySubnet(subnet);
+        }
+      },
+      description: 'Copy focused subnet',
+      category: 'Actions'
+    });
+
+    // Sort shortcuts (using Ctrl+Shift to avoid browser conflicts)
+    registerShortcut({
+      key: 'n',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => handleSort('network'),
+      description: 'Sort by network address',
+      category: 'Sorting'
+    });
+
+    registerShortcut({
+      key: 'c',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => handleSort('cidr'),
+      description: 'Sort by CIDR',
+      category: 'Sorting'
+    });
+
+    registerShortcut({
+      key: 'h',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => handleSort('usableHosts'),
+      description: 'Sort by usable hosts',
+      category: 'Sorting'
+    });
+
+    // Navigate through subnets with Ctrl+Shift+Arrow keys
+    registerShortcut({
+      key: 'ArrowDown',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => {
+        const nextIndex = Math.min(focusedSubnetIndex + 1, sortedAndFilteredSubnets.length - 1);
+        setFocusedSubnetIndex(nextIndex);
+        // Focus the checkbox of the next subnet
+        const checkboxes = containerRef.current?.querySelectorAll('input[type="checkbox"]');
+        if (checkboxes && checkboxes[nextIndex + (showSelection ? 1 : 0)]) {
+          (checkboxes[nextIndex + (showSelection ? 1 : 0)] as HTMLInputElement).focus();
+        }
+      },
+      description: 'Navigate to next subnet',
+      category: 'Navigation'
+    });
+
+    registerShortcut({
+      key: 'ArrowUp',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => {
+        const prevIndex = Math.max(focusedSubnetIndex - 1, 0);
+        setFocusedSubnetIndex(prevIndex);
+        // Focus the checkbox of the previous subnet
+        const checkboxes = containerRef.current?.querySelectorAll('input[type="checkbox"]');
+        if (checkboxes && checkboxes[prevIndex + (showSelection ? 1 : 0)]) {
+          (checkboxes[prevIndex + (showSelection ? 1 : 0)] as HTMLInputElement).focus();
+        }
+      },
+      description: 'Navigate to previous subnet',
+      category: 'Navigation'
+    });
+
+    // Show keyboard help
+    registerShortcut({
+      key: '?',
+      action: () => setShowKeyboardHelp(true),
+      description: 'Show keyboard shortcuts',
+      category: 'Help'
+    });
+
+    return () => {
+      unregisterShortcut('a');
+      unregisterShortcut('f');
+      unregisterShortcut('Escape');
+      unregisterShortcut('c');
+      unregisterShortcut('n');
+      unregisterShortcut('h');
+      unregisterShortcut('ArrowDown');
+      unregisterShortcut('ArrowUp');
+      unregisterShortcut('?');
+    };
+  }, [
+    registerShortcut,
+    unregisterShortcut,
+    showSelection,
+    handleSelectAll,
+    allSelected,
+    clearFilter,
+    internalFilterText,
+    selectedSubnets.size,
+    onSelectionChange,
+    focusedSubnetIndex,
+    sortedAndFilteredSubnets,
+    handleCopySubnet,
+    handleSort,
+    showKeyboardHelp
+  ]);
+
   // Use virtual scrolling for large subnet lists
   if (shouldUseVirtualScrolling) {
     return (
@@ -388,18 +569,30 @@ export const SubnetList = memo<SubnetListProps>(({
   }
 
   return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span>Subnet List ({subnets.length} subnets)</span>
-          {showSelection && selectedSubnets.size > 0 && (
-            <span className="text-sm font-normal text-muted-foreground">
-              {selectedSubnets.size} selected
-            </span>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div ref={containerRef}>
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Subnet List ({subnets.length} subnets)</span>
+            <div className="flex items-center gap-2">
+              {showSelection && selectedSubnets.size > 0 && (
+                <span className="text-sm font-normal text-muted-foreground">
+                  {selectedSubnets.size} selected
+                </span>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowKeyboardHelp(true)}
+                title="Show keyboard shortcuts (Press ? for help)"
+                data-action="show-help"
+              >
+                <Keyboard className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
         {/* Search/Filter Input */}
         <div className="mb-4 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -666,8 +859,65 @@ export const SubnetList = memo<SubnetListProps>(({
             </Card>
           ))}
         </div>
+
+        {/* Keyboard Shortcuts Help Modal */}
+        {showKeyboardHelp && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-background border rounded-lg p-6 max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Keyboard className="h-5 w-5" />
+                  Keyboard Shortcuts
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowKeyboardHelp(false)}
+                  data-close-on-escape="true"
+                >
+                  ×
+                </Button>
+              </div>
+              
+              <div className="space-y-4">
+                {Object.entries(
+                  getShortcuts().reduce((acc, shortcut) => {
+                    const category = shortcut.category || 'General';
+                    if (!acc[category]) acc[category] = [];
+                    acc[category].push(shortcut);
+                    return acc;
+                  }, {} as Record<string, ReturnType<typeof getShortcuts>>)
+                ).map(([category, shortcuts]) => (
+                  <div key={category}>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-2">{category}</h4>
+                    <div className="space-y-2">
+                      {shortcuts.map((shortcut, index) => (
+                        <div key={index} className="flex items-center justify-between text-sm">
+                          <span>{shortcut.description}</span>
+                          <kbd className="px-2 py-1 bg-muted rounded text-xs font-mono">
+                            {formatKeyboardShortcut(shortcut)}
+                          </kbd>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-6 pt-4 border-t text-xs text-muted-foreground">
+                <p>• Use Tab/Shift+Tab to navigate between elements</p>
+                <p>• Use Ctrl+Shift+↑/↓ to navigate through subnet rows</p>
+                <p>• Press Space to toggle subnet selection</p>
+                <p>• Press Ctrl+Shift+N/C/H to sort by Network/CIDR/Hosts</p>
+                <p>• Press Ctrl+F to focus search field</p>
+                <p>• Press Escape to clear search or selection</p>
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
+    </div>
   );
 });
 

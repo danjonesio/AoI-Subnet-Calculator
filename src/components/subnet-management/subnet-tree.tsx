@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback, memo } from 'react';
+import React, { useState, useMemo, useCallback, memo, useRef, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -24,9 +24,11 @@ import {
   Search,
   X,
   Network,
-  Loader2
+  Loader2,
+  Keyboard
 } from 'lucide-react';
 import { SplitSubnet, SubnetHierarchy } from '@/lib/types';
+import { useKeyboardNavigation, formatKeyboardShortcut } from '@/lib/keyboard-navigation';
 
 interface SubnetTreeProps {
   subnets: SplitSubnet[];
@@ -259,6 +261,29 @@ const SubnetTree = memo<SubnetTreeProps>(({
   const [internalExpandedNodes, setInternalExpandedNodes] = useState<Set<string>>(expandedNodes);
   const [internalFilterText, setInternalFilterText] = useState<string>(filterText);
 
+  // Keyboard navigation setup
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+  const [focusedNodeIndex, setFocusedNodeIndex] = useState<number>(-1);
+
+  // Set up keyboard navigation for the main component
+  const {
+    registerShortcut,
+    unregisterShortcut,
+    getShortcuts,
+    focusFirst,
+    restoreFocus
+  } = useKeyboardNavigation(containerRef, {
+    enableArrowKeys: true,
+    enableTabNavigation: true,
+    enableShortcuts: true,
+    enableEscapeHandling: true,
+    enableEnterHandling: true,
+    enableSpaceHandling: true,
+    trapFocus: false,
+    autoFocus: false
+  });
+
   // Build subnet hierarchy from flat list
   const subnetHierarchy = useMemo(() => {
     // Create a map for quick lookup
@@ -418,6 +443,167 @@ const SubnetTree = memo<SubnetTreeProps>(({
   const allSelected = subnets.length > 0 && selectedSubnets.size === subnets.length;
   const someSelected = selectedSubnets.size > 0 && selectedSubnets.size < subnets.length;
 
+  // Register keyboard shortcuts
+  useEffect(() => {
+    // Select all shortcut
+    registerShortcut({
+      key: 'a',
+      ctrlKey: true,
+      action: () => {
+        if (showSelection) {
+          handleSelectAll(!allSelected);
+        }
+      },
+      description: 'Select/deselect all subnets',
+      category: 'Selection'
+    });
+
+    // Focus search field
+    registerShortcut({
+      key: 'f',
+      ctrlKey: true,
+      action: () => {
+        const searchInput = containerRef.current?.querySelector('input[type="text"]') as HTMLInputElement;
+        searchInput?.focus();
+      },
+      description: 'Focus search field',
+      category: 'Navigation'
+    });
+
+    // Clear search or selection
+    registerShortcut({
+      key: 'Escape',
+      action: () => {
+        if (showKeyboardHelp) {
+          setShowKeyboardHelp(false);
+        } else if (internalFilterText) {
+          clearFilter();
+        } else if (selectedSubnets.size > 0) {
+          onSelectionChange(new Set());
+        }
+      },
+      description: 'Clear search or selection',
+      category: 'Navigation'
+    });
+
+    // Expand all nodes
+    registerShortcut({
+      key: 'e',
+      ctrlKey: true,
+      action: () => expandAll(),
+      description: 'Expand all nodes',
+      category: 'Tree Navigation'
+    });
+
+    // Collapse all nodes
+    registerShortcut({
+      key: 'c',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => collapseAll(),
+      description: 'Collapse all nodes',
+      category: 'Tree Navigation'
+    });
+
+    // Navigate through tree nodes with Ctrl+Shift+Arrow keys
+    registerShortcut({
+      key: 'ArrowDown',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => {
+        // Focus next tree node
+        const treeNodes = containerRef.current?.querySelectorAll('[role="treeitem"], button, input[type="checkbox"]');
+        if (treeNodes) {
+          const focused = document.activeElement;
+          const currentIndex = Array.from(treeNodes).indexOf(focused as HTMLElement);
+          const nextIndex = (currentIndex + 1) % treeNodes.length;
+          (treeNodes[nextIndex] as HTMLElement).focus();
+        }
+      },
+      description: 'Navigate to next tree node',
+      category: 'Tree Navigation'
+    });
+
+    registerShortcut({
+      key: 'ArrowUp',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => {
+        // Focus previous tree node
+        const treeNodes = containerRef.current?.querySelectorAll('[role="treeitem"], button, input[type="checkbox"]');
+        if (treeNodes) {
+          const focused = document.activeElement;
+          const currentIndex = Array.from(treeNodes).indexOf(focused as HTMLElement);
+          const prevIndex = currentIndex <= 0 ? treeNodes.length - 1 : currentIndex - 1;
+          (treeNodes[prevIndex] as HTMLElement).focus();
+        }
+      },
+      description: 'Navigate to previous tree node',
+      category: 'Tree Navigation'
+    });
+
+    // Expand/collapse focused node
+    registerShortcut({
+      key: 'ArrowRight',
+      action: () => {
+        const focused = document.activeElement;
+        const expandButton = focused?.closest('[data-subnet-node]')?.querySelector('button[aria-label*="Expand"]') as HTMLButtonElement;
+        if (expandButton) {
+          expandButton.click();
+        }
+      },
+      description: 'Expand focused node',
+      category: 'Tree Navigation'
+    });
+
+    registerShortcut({
+      key: 'ArrowLeft',
+      action: () => {
+        const focused = document.activeElement;
+        const collapseButton = focused?.closest('[data-subnet-node]')?.querySelector('button[aria-label*="Collapse"]') as HTMLButtonElement;
+        if (collapseButton) {
+          collapseButton.click();
+        }
+      },
+      description: 'Collapse focused node',
+      category: 'Tree Navigation'
+    });
+
+    // Show keyboard help
+    registerShortcut({
+      key: '?',
+      action: () => setShowKeyboardHelp(true),
+      description: 'Show keyboard shortcuts',
+      category: 'Help'
+    });
+
+    return () => {
+      unregisterShortcut('a');
+      unregisterShortcut('f');
+      unregisterShortcut('Escape');
+      unregisterShortcut('e');
+      unregisterShortcut('c');
+      unregisterShortcut('ArrowDown');
+      unregisterShortcut('ArrowUp');
+      unregisterShortcut('ArrowRight');
+      unregisterShortcut('ArrowLeft');
+      unregisterShortcut('?');
+    };
+  }, [
+    registerShortcut,
+    unregisterShortcut,
+    showSelection,
+    handleSelectAll,
+    allSelected,
+    clearFilter,
+    internalFilterText,
+    selectedSubnets.size,
+    onSelectionChange,
+    expandAll,
+    collapseAll,
+    showKeyboardHelp
+  ]);
+
   if (loading) {
     return (
       <Card className={className}>
@@ -442,18 +628,30 @@ const SubnetTree = memo<SubnetTreeProps>(({
   }
 
   return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span>Subnet Hierarchy ({subnets.length} subnets)</span>
-          {showSelection && selectedSubnets.size > 0 && (
-            <span className="text-sm font-normal text-muted-foreground">
-              {selectedSubnets.size} selected
-            </span>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div ref={containerRef}>
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Subnet Hierarchy ({subnets.length} subnets)</span>
+            <div className="flex items-center gap-2">
+              {showSelection && selectedSubnets.size > 0 && (
+                <span className="text-sm font-normal text-muted-foreground">
+                  {selectedSubnets.size} selected
+                </span>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowKeyboardHelp(true)}
+                title="Show keyboard shortcuts (Press ? for help)"
+                data-action="show-help"
+              >
+                <Keyboard className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
         {/* Controls */}
         <div className="mb-4 space-y-3">
           {/* Search/Filter Input */}
@@ -563,8 +761,65 @@ const SubnetTree = memo<SubnetTreeProps>(({
             </div>
           )}
         </div>
+
+        {/* Keyboard Shortcuts Help Modal */}
+        {showKeyboardHelp && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-background border rounded-lg p-6 max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Keyboard className="h-5 w-5" />
+                  Keyboard Shortcuts
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowKeyboardHelp(false)}
+                  data-close-on-escape="true"
+                >
+                  ×
+                </Button>
+              </div>
+              
+              <div className="space-y-4">
+                {Object.entries(
+                  getShortcuts().reduce((acc, shortcut) => {
+                    const category = shortcut.category || 'General';
+                    if (!acc[category]) acc[category] = [];
+                    acc[category].push(shortcut);
+                    return acc;
+                  }, {} as Record<string, ReturnType<typeof getShortcuts>>)
+                ).map(([category, shortcuts]) => (
+                  <div key={category}>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-2">{category}</h4>
+                    <div className="space-y-2">
+                      {shortcuts.map((shortcut, index) => (
+                        <div key={index} className="flex items-center justify-between text-sm">
+                          <span>{shortcut.description}</span>
+                          <kbd className="px-2 py-1 bg-muted rounded text-xs font-mono">
+                            {formatKeyboardShortcut(shortcut)}
+                          </kbd>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-6 pt-4 border-t text-xs text-muted-foreground">
+                <p>• Use Tab/Shift+Tab to navigate between elements</p>
+                <p>• Use Ctrl+Shift+↑/↓ to navigate through tree nodes</p>
+                <p>• Press Left/Right arrows to expand/collapse nodes</p>
+                <p>• Press Space to toggle subnet selection</p>
+                <p>• Press Ctrl+E to expand all, Ctrl+Shift+C to collapse all</p>
+                <p>• Press Escape to clear search or selection</p>
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
+    </div>
   );
 });
 

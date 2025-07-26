@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, Info, Scissors } from "lucide-react";
+import { AlertCircle, Info, Scissors, Keyboard } from "lucide-react";
 import { ErrorDisplay } from "./error-display";
 import { 
   SubnetSplitterProps, 
@@ -21,6 +21,7 @@ import {
 } from "@/lib/subnet-splitting";
 import { generateOperationId } from "@/lib/utils";
 import { debounce, performanceMonitor, shouldShowPerformanceWarning } from "@/lib/performance";
+import { useKeyboardNavigation, useSubnetKeyboardShortcuts, formatKeyboardShortcut } from "@/lib/keyboard-navigation";
 
 export function SubnetSplitter({
   parentSubnet,
@@ -36,6 +37,41 @@ export function SubnetSplitter({
   const [customCidr, setCustomCidr] = useState<string>('');
   const [isValidating, setIsValidating] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+
+  // Keyboard navigation setup
+  const containerRef = useRef<HTMLDivElement>(null);
+  const confirmationModalRef = useRef<HTMLDivElement>(null);
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+
+  // Set up keyboard navigation for the main component
+  const {
+    registerShortcut,
+    unregisterShortcut,
+    getShortcuts,
+    focusFirst,
+    restoreFocus
+  } = useKeyboardNavigation(containerRef, {
+    enableArrowKeys: true,
+    enableTabNavigation: true,
+    enableShortcuts: true,
+    enableEscapeHandling: true,
+    enableEnterHandling: true,
+    enableSpaceHandling: true,
+    trapFocus: false,
+    autoFocus: false
+  });
+
+  // Set up keyboard navigation for confirmation modal
+  const modalNavigation = useKeyboardNavigation(confirmationModalRef, {
+    enableArrowKeys: true,
+    enableTabNavigation: true,
+    enableShortcuts: true,
+    enableEscapeHandling: true,
+    enableEnterHandling: true,
+    enableSpaceHandling: true,
+    trapFocus: true,
+    autoFocus: true
+  });
 
   const [debouncedSplitCount, setDebouncedSplitCount] = useState<string>('2');
   const [debouncedCustomCidr, setDebouncedCustomCidr] = useState<string>('');
@@ -481,19 +517,164 @@ export function SubnetSplitter({
     { value: '32', label: 'Split into 32 subnets', description: 'Divide into 32 equal subnets' }
   ];
 
+  // Register keyboard shortcuts
+  useEffect(() => {
+    // Split subnet shortcut
+    registerShortcut({
+      key: 'Enter',
+      action: () => {
+        if (validation.isValid && !disabled && !isValidating) {
+          handleSplitClick();
+        }
+      },
+      description: 'Execute split operation',
+      category: 'Split Operations'
+    });
+
+    // Quick split shortcuts (using Ctrl+Shift to avoid browser conflicts)
+    registerShortcut({
+      key: '2',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => {
+        if (!disabled) {
+          setSplitType('equal');
+          setSplitCount('2');
+        }
+      },
+      description: 'Quick split in half',
+      category: 'Split Operations'
+    });
+
+    registerShortcut({
+      key: '4',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => {
+        if (!disabled) {
+          setSplitType('equal');
+          setSplitCount('4');
+        }
+      },
+      description: 'Quick split in quarters',
+      category: 'Split Operations'
+    });
+
+    registerShortcut({
+      key: '8',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => {
+        if (!disabled) {
+          setSplitType('equal');
+          setSplitCount('8');
+        }
+      },
+      description: 'Quick split in eighths',
+      category: 'Split Operations'
+    });
+
+    // Toggle split type
+    registerShortcut({
+      key: 't',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => {
+        if (!disabled) {
+          setSplitType(prev => prev === 'equal' ? 'custom' : 'equal');
+        }
+      },
+      description: 'Toggle split type',
+      category: 'Split Operations'
+    });
+
+    // Focus custom CIDR input
+    registerShortcut({
+      key: 'i',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => {
+        if (!disabled && splitType === 'custom') {
+          const input = containerRef.current?.querySelector('#custom-cidr') as HTMLInputElement;
+          input?.focus();
+        }
+      },
+      description: 'Focus custom CIDR input',
+      category: 'Navigation'
+    });
+
+    // Show keyboard help
+    registerShortcut({
+      key: 'h',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => setShowKeyboardHelp(true),
+      description: 'Show keyboard shortcuts',
+      category: 'Help'
+    });
+
+    // Close confirmation dialog
+    registerShortcut({
+      key: 'Escape',
+      action: () => {
+        if (showConfirmation) {
+          setShowConfirmation(false);
+        }
+        if (showKeyboardHelp) {
+          setShowKeyboardHelp(false);
+        }
+      },
+      description: 'Close dialogs',
+      category: 'Navigation'
+    });
+
+    return () => {
+      unregisterShortcut('Enter');
+      unregisterShortcut('2');
+      unregisterShortcut('4');
+      unregisterShortcut('8');
+      unregisterShortcut('t');
+      unregisterShortcut('i');
+      unregisterShortcut('h');
+      unregisterShortcut('Escape');
+    };
+  }, [
+    registerShortcut,
+    unregisterShortcut,
+    validation.isValid,
+    disabled,
+    isValidating,
+    handleSplitClick,
+    splitType,
+    showConfirmation,
+    showKeyboardHelp
+  ]);
+
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Scissors className="h-5 w-5" />
-          Split Subnet
-        </CardTitle>
-        <CardDescription>
-          Divide {parentSubnet.network}{parentSubnet.cidr} into smaller subnets
-          {cloudMode !== 'normal' && ` (${cloudMode.toUpperCase()} mode)`}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <div ref={containerRef}>
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Scissors className="h-5 w-5" />
+              Split Subnet
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowKeyboardHelp(true)}
+              title="Show keyboard shortcuts (Press ? for help)"
+              data-action="show-help"
+            >
+              <Keyboard className="h-4 w-4" />
+            </Button>
+          </CardTitle>
+          <CardDescription>
+            Divide {parentSubnet.network}{parentSubnet.cidr} into smaller subnets
+            {cloudMode !== 'normal' && ` (${cloudMode.toUpperCase()} mode)`}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
         {/* Split Type Selector */}
         <div className="space-y-2">
           <Label htmlFor="split-type">Split Type</Label>
@@ -671,10 +852,68 @@ export function SubnetSplitter({
           )}
         </Button>
 
+        {/* Keyboard Shortcuts Help Modal */}
+        {showKeyboardHelp && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-background border rounded-lg p-6 max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Keyboard className="h-5 w-5" />
+                  Keyboard Shortcuts
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowKeyboardHelp(false)}
+                  data-close-on-escape="true"
+                >
+                  ×
+                </Button>
+              </div>
+              
+              <div className="space-y-4">
+                {Object.entries(
+                  getShortcuts().reduce((acc, shortcut) => {
+                    const category = shortcut.category || 'General';
+                    if (!acc[category]) acc[category] = [];
+                    acc[category].push(shortcut);
+                    return acc;
+                  }, {} as Record<string, ReturnType<typeof getShortcuts>>)
+                ).map(([category, shortcuts]) => (
+                  <div key={category}>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-2">{category}</h4>
+                    <div className="space-y-2">
+                      {shortcuts.map((shortcut, index) => (
+                        <div key={index} className="flex items-center justify-between text-sm">
+                          <span>{shortcut.description}</span>
+                          <kbd className="px-2 py-1 bg-muted rounded text-xs font-mono">
+                            {formatKeyboardShortcut(shortcut)}
+                          </kbd>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-6 pt-4 border-t text-xs text-muted-foreground">
+                <p>• Use Tab/Shift+Tab to navigate between elements</p>
+                <p>• Use Ctrl+Shift+↑/↓ to navigate within components</p>
+                <p>• Press Escape to close dialogs and clear focus</p>
+                <p>• Press Enter to activate focused buttons</p>
+                <p>• Press Space to toggle checkboxes</p>
+                <p>• Use Ctrl+Shift+2/4/8 for quick splits</p>
+                <p>• Use Ctrl+Shift+T to toggle split type</p>
+                <p>• Use Ctrl+Shift+H to show keyboard shortcuts</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Confirmation Dialog for Large Operations */}
         {showConfirmation && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-background border rounded-lg p-6 max-w-md mx-4">
+            <div ref={confirmationModalRef} className="bg-background border rounded-lg p-6 max-w-md mx-4">
               <div className="flex items-center gap-2 mb-4">
                 <AlertCircle className="h-5 w-5 text-orange-500" />
                 <h3 className="text-lg font-semibold">Confirm Large Split Operation</h3>
@@ -748,5 +987,6 @@ export function SubnetSplitter({
         )}
       </CardContent>
     </Card>
+    </div>
   );
 }

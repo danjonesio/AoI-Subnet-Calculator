@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertCircle, Link2, CheckSquare, Square } from "lucide-react";
+import { AlertCircle, Link2, CheckSquare, Square, Keyboard } from "lucide-react";
 import { ErrorDisplay } from "./error-display";
 import { 
   SubnetJoinerProps, 
@@ -21,6 +21,7 @@ import {
   createSubnetError
 } from "@/lib/subnet-splitting";
 import { generateOperationId } from "@/lib/utils";
+import { useKeyboardNavigation, formatKeyboardShortcut } from "@/lib/keyboard-navigation";
 
 export function SubnetJoiner({
   availableSubnets,
@@ -34,6 +35,41 @@ export function SubnetJoiner({
   const [isValidating, setIsValidating] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [joinPreview, setJoinPreview] = useState<SplitSubnet | null>(null);
+
+  // Keyboard navigation setup
+  const containerRef = useRef<HTMLDivElement>(null);
+  const confirmationModalRef = useRef<HTMLDivElement>(null);
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+
+  // Set up keyboard navigation for the main component
+  const {
+    registerShortcut,
+    unregisterShortcut,
+    getShortcuts,
+    focusFirst,
+    restoreFocus
+  } = useKeyboardNavigation(containerRef, {
+    enableArrowKeys: true,
+    enableTabNavigation: true,
+    enableShortcuts: true,
+    enableEscapeHandling: true,
+    enableEnterHandling: true,
+    enableSpaceHandling: true,
+    trapFocus: false,
+    autoFocus: false
+  });
+
+  // Set up keyboard navigation for confirmation modal
+  const modalNavigation = useKeyboardNavigation(confirmationModalRef, {
+    enableArrowKeys: true,
+    enableTabNavigation: true,
+    enableShortcuts: true,
+    enableEscapeHandling: true,
+    enableEnterHandling: true,
+    enableSpaceHandling: true,
+    trapFocus: true,
+    autoFocus: true
+  });
 
   // Filter IPv4 subnets only for joining
   const ipv4Subnets = useMemo(() => {
@@ -242,19 +278,172 @@ export function SubnetJoiner({
     return 'partial';
   }, [selectedSubnets.size, ipv4Subnets.length]);
 
+  // Register keyboard shortcuts
+  useEffect(() => {
+    // Join subnets shortcut
+    registerShortcut({
+      key: 'Enter',
+      action: () => {
+        if (validation.isValid && !disabled && !isValidating && selectedSubnetObjects.length >= 2) {
+          handleJoinClick();
+        }
+      },
+      description: 'Execute join operation',
+      category: 'Join Operations'
+    });
+
+    // Select all shortcut
+    registerShortcut({
+      key: 'a',
+      ctrlKey: true,
+      action: () => {
+        if (!disabled) {
+          handleSelectAll();
+        }
+      },
+      description: 'Select/deselect all subnets',
+      category: 'Selection'
+    });
+
+    // Clear selection shortcut
+    registerShortcut({
+      key: 'Escape',
+      action: () => {
+        if (showConfirmation) {
+          setShowConfirmation(false);
+        } else if (showKeyboardHelp) {
+          setShowKeyboardHelp(false);
+        } else if (selectedSubnets.size > 0) {
+          onSelectionChange(new Set());
+        }
+      },
+      description: 'Clear selection or close dialogs',
+      category: 'Selection'
+    });
+
+    // Quick group selection shortcuts (using Ctrl+Shift to avoid browser conflicts)
+    for (let i = 1; i <= Math.min(adjacentGroups.length, 9); i++) {
+      registerShortcut({
+        key: i.toString(),
+        ctrlKey: true,
+        shiftKey: true,
+        action: () => {
+          if (!disabled && adjacentGroups[i - 1]) {
+            handleSelectGroup(adjacentGroups[i - 1]);
+          }
+        },
+        description: `Select/deselect group ${i}`,
+        category: 'Selection'
+      });
+    }
+
+    // Show keyboard help
+    registerShortcut({
+      key: 'h',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => setShowKeyboardHelp(true),
+      description: 'Show keyboard shortcuts',
+      category: 'Help'
+    });
+
+    // Navigate through subnets with Ctrl+Shift+Arrow keys
+    registerShortcut({
+      key: 'ArrowDown',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => {
+        // Focus next subnet checkbox
+        const checkboxes = containerRef.current?.querySelectorAll('input[type="checkbox"]');
+        if (checkboxes && checkboxes.length > 0) {
+          const focused = document.activeElement;
+          const currentIndex = Array.from(checkboxes).indexOf(focused as HTMLInputElement);
+          const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % checkboxes.length : 0;
+          const nextCheckbox = checkboxes[nextIndex] as HTMLInputElement;
+          if (nextCheckbox && typeof nextCheckbox.focus === 'function') {
+            nextCheckbox.focus();
+          }
+        }
+      },
+      description: 'Navigate to next subnet',
+      category: 'Navigation'
+    });
+
+    registerShortcut({
+      key: 'ArrowUp',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => {
+        // Focus previous subnet checkbox
+        const checkboxes = containerRef.current?.querySelectorAll('input[type="checkbox"]');
+        if (checkboxes && checkboxes.length > 0) {
+          const focused = document.activeElement;
+          const currentIndex = Array.from(checkboxes).indexOf(focused as HTMLInputElement);
+          const prevIndex = currentIndex > 0 ? currentIndex - 1 : checkboxes.length - 1;
+          const prevCheckbox = checkboxes[prevIndex] as HTMLInputElement;
+          if (prevCheckbox && typeof prevCheckbox.focus === 'function') {
+            prevCheckbox.focus();
+          }
+        }
+      },
+      description: 'Navigate to previous subnet',
+      category: 'Navigation'
+    });
+
+    return () => {
+      unregisterShortcut('Enter');
+      unregisterShortcut('a');
+      unregisterShortcut('Escape');
+      unregisterShortcut('h');
+      unregisterShortcut('ArrowDown');
+      unregisterShortcut('ArrowUp');
+      // Unregister group shortcuts
+      for (let i = 1; i <= 9; i++) {
+        unregisterShortcut(i.toString());
+      }
+    };
+  }, [
+    registerShortcut,
+    unregisterShortcut,
+    validation.isValid,
+    disabled,
+    isValidating,
+    selectedSubnetObjects.length,
+    handleJoinClick,
+    handleSelectAll,
+    showConfirmation,
+    showKeyboardHelp,
+    selectedSubnets.size,
+    onSelectionChange,
+    adjacentGroups,
+    handleSelectGroup
+  ]);
+
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Link2 className="h-5 w-5" />
-          Join Subnets
-        </CardTitle>
-        <CardDescription>
-          Select adjacent subnets to combine them into larger networks
-          {ipVersion === 'ipv6' && ' (IPv6 joining not yet supported)'}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <div ref={containerRef}>
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Link2 className="h-5 w-5" />
+              Join Subnets
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowKeyboardHelp(true)}
+              title="Show keyboard shortcuts (Press ? for help)"
+              data-action="show-help"
+            >
+              <Keyboard className="h-4 w-4" />
+            </Button>
+          </CardTitle>
+          <CardDescription>
+            Select adjacent subnets to combine them into larger networks
+            {ipVersion === 'ipv6' && ' (IPv6 joining not yet supported)'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
         {/* IPv6 Notice */}
         {ipVersion === 'ipv6' && (
           <Alert>
@@ -474,10 +663,66 @@ export function SubnetJoiner({
           </>
         )}
 
+        {/* Keyboard Shortcuts Help Modal */}
+        {showKeyboardHelp && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-background border rounded-lg p-6 max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Keyboard className="h-5 w-5" />
+                  Keyboard Shortcuts
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowKeyboardHelp(false)}
+                  data-close-on-escape="true"
+                >
+                  ×
+                </Button>
+              </div>
+              
+              <div className="space-y-4">
+                {Object.entries(
+                  getShortcuts().reduce((acc, shortcut) => {
+                    const category = shortcut.category || 'General';
+                    if (!acc[category]) acc[category] = [];
+                    acc[category].push(shortcut);
+                    return acc;
+                  }, {} as Record<string, ReturnType<typeof getShortcuts>>)
+                ).map(([category, shortcuts]) => (
+                  <div key={category}>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-2">{category}</h4>
+                    <div className="space-y-2">
+                      {shortcuts.map((shortcut, index) => (
+                        <div key={index} className="flex items-center justify-between text-sm">
+                          <span>{shortcut.description}</span>
+                          <kbd className="px-2 py-1 bg-muted rounded text-xs font-mono">
+                            {formatKeyboardShortcut(shortcut)}
+                          </kbd>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-6 pt-4 border-t text-xs text-muted-foreground">
+                <p>• Use Tab/Shift+Tab to navigate between elements</p>
+                <p>• Use Ctrl+Shift+↑/↓ to navigate through subnet checkboxes</p>
+                <p>• Press Space to toggle subnet selection</p>
+                <p>• Press Ctrl+Shift+1-9 to quickly select adjacent groups</p>
+                <p>• Press Ctrl+Shift+H to show keyboard shortcuts</p>
+                <p>• Press Escape to clear selection or close dialogs</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Confirmation Dialog */}
         {showConfirmation && joinPreview && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-background border rounded-lg p-6 max-w-md mx-4">
+            <div ref={confirmationModalRef} className="bg-background border rounded-lg p-6 max-w-md mx-4">
               <div className="flex items-center gap-2 mb-4">
                 <AlertCircle className="h-5 w-5 text-orange-500" />
                 <h3 className="text-lg font-semibold">Confirm Join Operation</h3>
@@ -546,5 +791,6 @@ export function SubnetJoiner({
         )}
       </CardContent>
     </Card>
+    </div>
   );
 }
