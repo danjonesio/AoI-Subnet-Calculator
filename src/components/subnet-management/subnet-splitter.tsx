@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Info, Scissors } from "lucide-react";
+import { ErrorDisplay } from "./error-display";
 import { 
   SubnetSplitterProps, 
   SplitOptions, 
@@ -36,8 +36,7 @@ export function SubnetSplitter({
   const [customCidr, setCustomCidr] = useState<string>('');
   const [isValidating, setIsValidating] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
+
   const [debouncedSplitCount, setDebouncedSplitCount] = useState<string>('2');
   const [debouncedCustomCidr, setDebouncedCustomCidr] = useState<string>('');
 
@@ -636,30 +635,19 @@ export function SubnetSplitter({
         )}
 
         {/* Validation Messages */}
-        {validation.errors.length > 0 && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <div className="space-y-1">
-                {validation.errors.map((error, index) => (
-                  <div key={index}>{error}</div>
-                ))}
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {validation.warnings.length > 0 && (
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <div className="space-y-1">
-                {validation.warnings.map((warning, index) => (
-                  <div key={index}>{warning}</div>
-                ))}
-              </div>
-            </AlertDescription>
-          </Alert>
+        {(validation.errors.length > 0 || validation.warnings.length > 0) && (
+          <ErrorDisplay
+            key={`validation-${validation.errors.length}-${validation.warnings.length}-${splitType}-${splitCount}-${customCidr}`}
+            validation={validation}
+            context={{
+              operation: 'Split Subnet',
+              subnet: `${parentSubnet.network}${parentSubnet.cidr}`,
+              cloudMode,
+              ipVersion
+            }}
+            expandSuggestions={validation.suggestions && validation.suggestions.length > 0}
+            showDetails={process.env.NODE_ENV === 'development'}
+          />
         )}
 
         {/* Split Button */}

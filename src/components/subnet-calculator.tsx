@@ -26,6 +26,7 @@ import { SubnetJoiner } from "@/components/subnet-management/subnet-joiner";
 import { SubnetTree } from "@/components/subnet-management/subnet-tree";
 import { SubnetList } from "@/components/subnet-management/subnet-list";
 import { SubnetExport } from "@/components/subnet-management/subnet-export";
+import { SubnetErrorBoundary } from "@/components/subnet-management/subnet-error-boundary";
 
 interface CloudReservation {
   ip: string;
@@ -1177,42 +1178,46 @@ export default function SubnetCalculator() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Error Display */}
-                {subnetError && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      {subnetError}
-                    </AlertDescription>
-                  </Alert>
-                )}
+                <SubnetErrorBoundary 
+                  context="subnet-management"
+                  onReset={resetSubnetManagement}
+                >
+                  {/* Error Display */}
+                  {subnetError && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        {subnetError}
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
-                {/* Loading State */}
-                {isSubnetLoading && (
-                  <Alert>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <AlertDescription>
-                      Processing subnet operation...
-                    </AlertDescription>
-                  </Alert>
-                )}
+                  {/* Loading State */}
+                  {isSubnetLoading && (
+                    <Alert>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <AlertDescription>
+                        Processing subnet operation...
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
-                {/* Subnet Splitting Section */}
-                <div className="space-y-4">
-                  <SubnetSplitter
-                    parentSubnet={{
-                      ...subnetInfo,
-                      id: subnetInfo.network + subnetInfo.cidr,
-                      level: 0
-                    }}
-                    ipVersion={ipVersion}
-                    cloudMode={mode as CloudMode}
-                    onSplit={addSplitSubnets}
-                    onError={(error: SubnetError) => setSubnetError(error.message)}
-                    disabled={isSubnetLoading}
-                    maxSubnets={1000}
-                  />
-                </div>
+                  {/* Subnet Splitting Section */}
+                  <div className="space-y-4">
+                    <SubnetSplitter
+                      parentSubnet={{
+                        ...subnetInfo,
+                        id: subnetInfo.network + subnetInfo.cidr,
+                        level: 0
+                      }}
+                      ipVersion={ipVersion}
+                      cloudMode={mode as CloudMode}
+                      onSplit={addSplitSubnets}
+                      onError={(error: SubnetError) => setSubnetError(error.message)}
+                      disabled={isSubnetLoading}
+                      maxSubnets={1000}
+                    />
+                  </div>
 
                 {/* Subnet Management Controls - Only show when subnets exist */}
                 {splitSubnets.length > 0 && (
@@ -1366,6 +1371,7 @@ Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
                     </div>
                   </>
                 )}
+                </SubnetErrorBoundary>
               </CardContent>
             </Card>
           )}

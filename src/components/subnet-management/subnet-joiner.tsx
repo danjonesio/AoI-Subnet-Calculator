@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertCircle, Link2, CheckSquare, Square } from "lucide-react";
+import { ErrorDisplay } from "./error-display";
 import { 
   SubnetJoinerProps, 
   ValidationResult,
@@ -433,30 +434,21 @@ export function SubnetJoiner({
             )}
 
             {/* Validation messages */}
-            {validation.errors.length > 0 && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  <div className="space-y-1">
-                    {validation.errors.map((error, index) => (
-                      <div key={index}>{error}</div>
-                    ))}
-                  </div>
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {validation.warnings.length > 0 && (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  <div className="space-y-1">
-                    {validation.warnings.map((warning, index) => (
-                      <div key={index}>{warning}</div>
-                    ))}
-                  </div>
-                </AlertDescription>
-              </Alert>
+            {(validation.errors.length > 0 || validation.warnings.length > 0) && (
+              <ErrorDisplay
+                key={`validation-${validation.errors.length}-${validation.warnings.length}-${selectedSubnetObjects.length}`}
+                validation={validation}
+                context={{
+                  operation: 'Join Subnets',
+                  subnet: selectedSubnetObjects.length > 0 ? 
+                    `${selectedSubnetObjects.length} selected subnets` : 
+                    'No subnets selected',
+                  cloudMode: 'normal',
+                  ipVersion
+                }}
+                expandSuggestions={validation.suggestions && validation.suggestions.length > 0}
+                showDetails={process.env.NODE_ENV === 'development'}
+              />
             )}
 
             {/* Join button */}
@@ -479,18 +471,6 @@ export function SubnetJoiner({
                 </>
               )}
             </Button>
-
-            {/* Suggestions */}
-            {validation.suggestions && validation.suggestions.length > 0 && (
-              <div className="text-sm text-muted-foreground space-y-1">
-                <div className="font-medium">Suggestions:</div>
-                <ul className="list-disc list-inside space-y-1">
-                  {validation.suggestions.map((suggestion, index) => (
-                    <li key={index}>{suggestion}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </>
         )}
 
