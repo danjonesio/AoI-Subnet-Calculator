@@ -421,26 +421,41 @@ export function SubnetJoiner({
 
   return (
     <div ref={containerRef}>
+      {/* Live region for dynamic content updates */}
+      <div 
+        aria-live="polite" 
+        aria-atomic="false"
+        className="sr-only"
+        id="subnet-joiner-live-region"
+      >
+        {validation.errors.length > 0 && `Join validation failed: ${validation.errors[0]}`}
+        {validation.isValid && selectedSubnetObjects.length >= 2 && `${selectedSubnetObjects.length} adjacent subnets ready to join`}
+        {selectedSubnets.size > 0 && `${selectedSubnets.size} of ${ipv4Subnets.length} subnets selected for joining`}
+      </div>
+
       <Card className="w-full">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Link2 className="h-5 w-5" />
-              Join Subnets
+              <Link2 className="h-5 w-5" aria-hidden="true" />
+              <span id="subnet-joiner-title">Join Subnets</span>
             </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowKeyboardHelp(true)}
+              aria-label="Show keyboard shortcuts help dialog"
               title="Show keyboard shortcuts (Press ? for help)"
               data-action="show-help"
             >
-              <Keyboard className="h-4 w-4" />
+              <Keyboard className="h-4 w-4" aria-hidden="true" />
+              <span className="sr-only">Keyboard shortcuts</span>
             </Button>
           </CardTitle>
-          <CardDescription>
-            Select adjacent subnets to combine them into larger networks
-            {ipVersion === 'ipv6' && ' (IPv6 joining not yet supported)'}
+          <CardDescription id="subnet-joiner-description">
+            Select adjacent subnets to combine them into larger networks.
+            {ipVersion === 'ipv6' && ' IPv6 joining is not yet supported - switch to IPv4 mode.'}
+            {ipv4Subnets.length > 0 && ` ${ipv4Subnets.length} subnet${ipv4Subnets.length !== 1 ? 's' : ''} available for joining.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -529,60 +544,126 @@ export function SubnetJoiner({
 
             {/* Subnet table */}
             <div className="border rounded-lg">
-              <Table>
+              <Table role="table" aria-label="Subnets available for joining" aria-describedby="subnet-joiner-description">
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">
+                  <TableRow role="row">
+                    <TableHead className="w-12" role="columnheader">
                       <Checkbox
                         checked={selectAllState === 'all'}
                         onCheckedChange={handleSelectAll}
                         disabled={disabled}
                         className={selectAllState === 'partial' ? 'opacity-50' : ''}
+                        aria-label={`Select all ${ipv4Subnets.length} subnets for joining. Currently ${selectedSubnets.size} of ${ipv4Subnets.length} subnets selected.`}
+                        aria-describedby="select-all-join-description"
                       />
+                      <span id="select-all-join-description" className="sr-only">
+                        {selectAllState === 'all' ? 'All subnets are selected for joining' : 
+                         selectAllState === 'partial' ? `${selectedSubnets.size} of ${ipv4Subnets.length} subnets are selected for joining` :
+                         'No subnets are selected for joining'}
+                      </span>
                     </TableHead>
-                    <TableHead>Network</TableHead>
-                    <TableHead>CIDR</TableHead>
-                    <TableHead>Usable Hosts</TableHead>
-                    <TableHead>IP Range</TableHead>
-                    <TableHead>Group</TableHead>
+                    <TableHead role="columnheader">
+                      <span aria-describedby="network-join-description">Network</span>
+                      <span id="network-join-description" className="sr-only">
+                        Network address of each subnet in CIDR notation
+                      </span>
+                    </TableHead>
+                    <TableHead role="columnheader">
+                      <span aria-describedby="cidr-join-description">CIDR</span>
+                      <span id="cidr-join-description" className="sr-only">
+                        CIDR prefix length indicating subnet size
+                      </span>
+                    </TableHead>
+                    <TableHead role="columnheader">
+                      <span aria-describedby="hosts-join-description">Usable Hosts</span>
+                      <span id="hosts-join-description" className="sr-only">
+                        Number of IP addresses available for devices in each subnet
+                      </span>
+                    </TableHead>
+                    <TableHead role="columnheader">
+                      <span aria-describedby="range-join-description">IP Range</span>
+                      <span id="range-join-description" className="sr-only">
+                        First and last usable IP addresses in each subnet
+                      </span>
+                    </TableHead>
+                    <TableHead role="columnheader">
+                      <span aria-describedby="group-join-description">Group</span>
+                      <span id="group-join-description" className="sr-only">
+                        Adjacent group membership for subnet joining
+                      </span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  {ipv4Subnets.map((subnet) => {
+                <TableBody role="rowgroup">
+                  {ipv4Subnets.map((subnet, index) => {
                     const isSelected = selectedSubnets.has(subnet.id);
                     const groupInfo = getSubnetGroupInfo(subnet.id);
                     
                     return (
                       <TableRow 
                         key={subnet.id}
+                        role="row"
                         className={`${isSelected ? 'bg-muted/50' : ''} ${
                           groupInfo?.isPartiallySelected ? 'bg-blue-50 dark:bg-blue-950/20' : ''
                         }`}
+                        aria-selected={isSelected}
+                        aria-describedby={`join-subnet-${subnet.id}-description`}
                       >
-                        <TableCell>
+                        <TableCell role="gridcell">
                           <Checkbox
                             checked={isSelected}
                             onCheckedChange={() => handleSubnetToggle(subnet.id)}
                             disabled={disabled}
+                            aria-label={`Select subnet ${subnet.network}/${subnet.cidr} for joining. ${groupInfo ? `Part of adjacent group ${groupInfo.groupIndex + 1}.` : 'Not part of an adjacent group.'} ${subnet.usableHosts.toLocaleString()} usable hosts.`}
+                            aria-describedby={`join-subnet-${subnet.id}-selection-description`}
                           />
+                          <span id={`join-subnet-${subnet.id}-selection-description`} className="sr-only">
+                            {isSelected ? 'Selected for joining' : 'Not selected for joining'}. 
+                            Subnet {index + 1} of {ipv4Subnets.length}.
+                            {groupInfo && groupInfo.canJoin ? ` Can be joined with other subnets in group ${groupInfo.groupIndex + 1}.` : ' Cannot be joined - not adjacent to other subnets.'}
+                          </span>
                         </TableCell>
-                        <TableCell className="font-mono">{subnet.network}</TableCell>
-                        <TableCell>/{subnet.cidr}</TableCell>
-                        <TableCell>{subnet.usableHosts.toLocaleString()}</TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {subnet.firstHost} - {subnet.lastHost}
+                        <TableCell className="font-mono" role="gridcell">
+                          <span aria-label={`Network address ${subnet.network}`}>
+                            {subnet.network}
+                          </span>
                         </TableCell>
-                        <TableCell>
-                          {groupInfo && (
-                            <div className="flex items-center gap-1">
+                        <TableCell role="gridcell">
+                          <span aria-label={`CIDR prefix length ${subnet.cidr}`}>
+                            /{subnet.cidr}
+                          </span>
+                        </TableCell>
+                        <TableCell role="gridcell">
+                          <span aria-label={`${subnet.usableHosts.toLocaleString()} usable host addresses`}>
+                            {subnet.usableHosts.toLocaleString()}
+                          </span>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm" role="gridcell">
+                          <span aria-label={`IP range from ${subnet.firstHost} to ${subnet.lastHost}`}>
+                            {subnet.firstHost} - {subnet.lastHost}
+                          </span>
+                        </TableCell>
+                        <TableCell role="gridcell">
+                          {groupInfo ? (
+                            <div className="flex items-center gap-1" aria-label={`Adjacent group ${groupInfo.groupIndex + 1}${groupInfo.canJoin ? ', can be joined' : ', cannot be joined'}`}>
                               <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">
                                 Group {groupInfo.groupIndex + 1}
                               </span>
                               {groupInfo.canJoin && (
-                                <Link2 className="h-3 w-3 text-blue-500" />
+                                <Link2 className="h-3 w-3 text-blue-500" aria-hidden="true" />
                               )}
                             </div>
+                          ) : (
+                            <span className="text-muted-foreground text-sm" aria-label="Not part of an adjacent group">
+                              -
+                            </span>
                           )}
+                          <span id={`join-subnet-${subnet.id}-description`} className="sr-only">
+                            Subnet {subnet.network} slash {subnet.cidr} with {subnet.usableHosts.toLocaleString()} usable hosts. 
+                            IP range from {subnet.firstHost} to {subnet.lastHost}.
+                            {groupInfo ? ` Part of adjacent group ${groupInfo.groupIndex + 1} with ${groupInfo.group.length} subnets.` : ' Not adjacent to other subnets.'}
+                            {groupInfo?.canJoin ? ' Can be joined with other subnets in this group.' : ' Cannot be joined due to non-adjacency.'}
+                          </span>
                         </TableCell>
                       </TableRow>
                     );

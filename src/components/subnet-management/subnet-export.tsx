@@ -456,11 +456,28 @@ export function SubnetExport({
 
   return (
     <Card className={className}>
+      {/* Live region for export feedback */}
+      <div 
+        aria-live="polite" 
+        aria-atomic="true"
+        className="sr-only"
+        id="subnet-export-live-region"
+      >
+        {exportFeedback && exportFeedback.message}
+        {isExporting && 'Export operation in progress...'}
+      </div>
+
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Download className="h-5 w-5" />
-          Export Subnets
+          <Download className="h-5 w-5" aria-hidden="true" />
+          <span id="subnet-export-title">Export Subnets</span>
         </CardTitle>
+        <div id="subnet-export-description" className="sr-only">
+          Export subnet information in various formats including text, CSV, and JSON. 
+          Choose export options and scope before downloading or copying to clipboard.
+          {subnets.length > 0 && ` ${subnets.length} subnet${subnets.length !== 1 ? 's' : ''} available for export.`}
+          {selectedSubnets.size > 0 && ` ${selectedSubnets.size} subnet${selectedSubnets.size !== 1 ? 's' : ''} currently selected.`}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Export feedback */}
@@ -486,14 +503,25 @@ export function SubnetExport({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Format selection */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Export Format</label>
-            <Select value={exportFormat} onValueChange={(value) => setExportFormat(value as ExportOptions['format'])}>
-              <SelectTrigger>
+            <label htmlFor="export-format" className="text-sm font-medium" id="export-format-label">
+              Export Format
+            </label>
+            <Select 
+              value={exportFormat} 
+              onValueChange={(value) => setExportFormat(value as ExportOptions['format'])}
+              aria-labelledby="export-format-label"
+              aria-describedby="export-format-description"
+            >
+              <SelectTrigger id="export-format">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {availableFormats.map(format => (
-                  <SelectItem key={format} value={format}>
+                  <SelectItem 
+                    key={format} 
+                    value={format}
+                    aria-describedby={`format-${format}-description`}
+                  >
                     <div className="flex items-center gap-2">
                       {getFormatIcon(format)}
                       <span className="capitalize">{format}</span>
@@ -501,32 +529,49 @@ export function SubnetExport({
                       {format === 'csv' && <span className="text-xs text-muted-foreground">(Spreadsheet)</span>}
                       {format === 'json' && <span className="text-xs text-muted-foreground">(Structured data)</span>}
                     </div>
+                    <span id={`format-${format}-description`} className="sr-only">
+                      {format === 'text' && 'Plain text format suitable for human reading and documentation'}
+                      {format === 'csv' && 'Comma-separated values format suitable for spreadsheet applications'}
+                      {format === 'json' && 'JavaScript Object Notation format suitable for programmatic processing'}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            <div id="export-format-description" className="sr-only">
+              Choose the file format for exporting subnet data. Different formats are suitable for different use cases.
+            </div>
           </div>
 
           {/* Export scope */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Export Scope</label>
-            <div className="text-sm text-muted-foreground">
+            <label className="text-sm font-medium" id="export-scope-label">Export Scope</label>
+            <div 
+              className="text-sm text-muted-foreground"
+              aria-labelledby="export-scope-label"
+              aria-describedby="export-scope-description"
+            >
               {selectedOnly && selectedSubnets.size > 0 
                 ? `${selectedSubnets.size} selected subnet${selectedSubnets.size === 1 ? '' : 's'}`
                 : `All ${subnets.length} subnet${subnets.length === 1 ? '' : 's'}`
               }
             </div>
+            <div id="export-scope-description" className="sr-only">
+              Shows the number of subnets that will be included in the export based on current selection settings.
+            </div>
           </div>
         </div>
 
         {/* Export options checkboxes */}
-        <div className="space-y-3">
+        <fieldset className="space-y-3">
+          <legend className="sr-only">Export Options</legend>
           <div className="flex items-center space-x-2">
             <Checkbox
               id="selectedOnly"
               checked={selectedOnly}
               onCheckedChange={(checked) => setSelectedOnly(checked === true)}
               disabled={selectedSubnets.size === 0}
+              aria-describedby="selected-only-description"
             />
             <label 
               htmlFor="selectedOnly" 
@@ -535,6 +580,12 @@ export function SubnetExport({
               Export selected subnets only
               {selectedSubnets.size === 0 && ' (no subnets selected)'}
             </label>
+            <div id="selected-only-description" className="sr-only">
+              {selectedSubnets.size === 0 
+                ? 'No subnets are currently selected. Select subnets first to enable this option.'
+                : `Export only the ${selectedSubnets.size} currently selected subnet${selectedSubnets.size !== 1 ? 's' : ''} instead of all ${subnets.length} subnets.`
+              }
+            </div>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -542,10 +593,14 @@ export function SubnetExport({
               id="includeHeaders"
               checked={includeHeaders}
               onCheckedChange={(checked) => setIncludeHeaders(checked === true)}
+              aria-describedby="include-headers-description"
             />
             <label htmlFor="includeHeaders" className="text-sm">
               Include headers and titles
             </label>
+            <div id="include-headers-description" className="sr-only">
+              Include column headers and section titles in the exported data for better readability and structure.
+            </div>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -553,41 +608,59 @@ export function SubnetExport({
               id="includeMetadata"
               checked={includeMetadata}
               onCheckedChange={(checked) => setIncludeMetadata(checked === true)}
+              aria-describedby="include-metadata-description"
             />
             <label htmlFor="includeMetadata" className="text-sm">
               Include metadata and additional information
             </label>
+            <div id="include-metadata-description" className="sr-only">
+              Include additional information such as export date, hierarchy levels, cloud provider details, and IPv6 specific data.
+            </div>
           </div>
-        </div>
+        </fieldset>
 
         {/* Export actions */}
-        <div className="flex flex-col sm:flex-row gap-2 pt-4">
+        <div className="flex flex-col sm:flex-row gap-2 pt-4" role="group" aria-labelledby="export-actions-label">
+          <div id="export-actions-label" className="sr-only">Export Actions</div>
           <Button
             onClick={handleCopyAll}
             disabled={isExporting || subnetsToExport.length === 0}
             className="flex-1"
+            aria-describedby="copy-button-description"
           >
             {isExporting ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
             ) : (
-              <Copy className="h-4 w-4 mr-2" />
+              <Copy className="h-4 w-4 mr-2" aria-hidden="true" />
             )}
-            Copy All to Clipboard
+            <span>Copy All to Clipboard</span>
+            {isExporting && <span className="sr-only">Export in progress...</span>}
           </Button>
+          <div id="copy-button-description" className="sr-only">
+            Copy {subnetsToExport.length} subnet{subnetsToExport.length !== 1 ? 's' : ''} to clipboard in {exportFormat.toUpperCase()} format. 
+            {includeHeaders ? 'Headers will be included. ' : 'Headers will not be included. '}
+            {includeMetadata ? 'Metadata will be included.' : 'Metadata will not be included.'}
+          </div>
 
           <Button
             onClick={handleDownload}
             disabled={isExporting || subnetsToExport.length === 0}
             variant="outline"
             className="flex-1"
+            aria-describedby="download-button-description"
           >
             {isExporting ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
             ) : (
-              <Download className="h-4 w-4 mr-2" />
+              <Download className="h-4 w-4 mr-2" aria-hidden="true" />
             )}
-            Download File
+            <span>Download File</span>
+            {isExporting && <span className="sr-only">Export in progress...</span>}
           </Button>
+          <div id="download-button-description" className="sr-only">
+            Download {subnetsToExport.length} subnet{subnetsToExport.length !== 1 ? 's' : ''} as a {exportFormat.toUpperCase()} file. 
+            File will be named with timestamp and subnet count for easy identification.
+          </div>
         </div>
 
         {/* Preview section */}

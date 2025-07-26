@@ -33,8 +33,10 @@ class CalculationCache {
     ipVersion: IPVersion
   ): string {
     const keyData = {
+      id: parentSubnet.id,
       network: parentSubnet.network,
       cidr: parentSubnet.cidr,
+      level: parentSubnet.level,
       splitType: splitOptions?.splitType || null,
       splitCount: splitOptions?.splitCount || null,
       customCidr: splitOptions?.customCidr || null,
@@ -149,12 +151,12 @@ class CalculationCache {
   } {
     const entries = Array.from(this.cache.values());
     const now = Date.now();
-    
+
     const totalAccesses = entries.reduce((sum, entry) => sum + entry.accessCount, 0);
     const cacheHits = entries.reduce((sum, entry) => sum + (entry.accessCount - 1), 0);
     const hitRate = totalAccesses > 0 ? (cacheHits / totalAccesses) * 100 : 0;
-    
-    const oldestEntry = entries.length > 0 
+
+    const oldestEntry = entries.length > 0
       ? Math.min(...entries.map(entry => now - entry.timestamp))
       : 0;
 
@@ -365,7 +367,7 @@ export class PerformanceMonitor {
       end: (): PerformanceMetrics => {
         const endTime = performance.now();
         const endMemory = this.getMemoryUsage();
-        
+
         const metrics: PerformanceMetrics = {
           operationType,
           startTime,
@@ -420,7 +422,7 @@ export class PerformanceMonitor {
     memoryTrend?: 'increasing' | 'decreasing' | 'stable';
     recommendations: string[];
   } {
-    const filteredMetrics = operationType 
+    const filteredMetrics = operationType
       ? this.metrics.filter(m => m.operationType === operationType)
       : this.metrics;
 
@@ -450,7 +452,7 @@ export class PerformanceMonitor {
     if (memoryMetrics.length >= 3) {
       const memoryChanges = memoryMetrics.map(m => (m.memoryAfter! - m.memoryBefore!));
       const avgMemoryChange = memoryChanges.reduce((sum, c) => sum + c, 0) / memoryChanges.length;
-      
+
       if (avgMemoryChange > 1024 * 1024) { // > 1MB average increase
         memoryTrend = 'increasing';
       } else if (avgMemoryChange < -1024 * 1024) { // > 1MB average decrease
@@ -462,19 +464,19 @@ export class PerformanceMonitor {
 
     // Generate recommendations
     const recommendations: string[] = [];
-    
+
     if (averageDuration > 500) {
       recommendations.push('Consider using progressive calculation for better responsiveness');
     }
-    
+
     if (slowOperations > filteredMetrics.length * 0.2) {
       recommendations.push('High number of slow operations detected - consider optimizing calculations');
     }
-    
+
     if (memoryTrend === 'increasing') {
       recommendations.push('Memory usage is increasing - check for memory leaks');
     }
-    
+
     if (maxDuration > 5000) {
       recommendations.push('Very slow operations detected - consider breaking into smaller batches');
     }
@@ -589,14 +591,14 @@ export function getPerformanceStats(): {
 } {
   const cacheStats = calculationCache.getStats();
   const monitorStats = performanceMonitor.getStats();
-  
+
   const recommendations: string[] = [];
-  
+
   // Cache recommendations
   if (cacheStats.hitRate < 20) {
     recommendations.push('Low cache hit rate - consider adjusting calculation parameters');
   }
-  
+
   if (cacheStats.size === cacheStats.maxSize) {
     recommendations.push('Cache is full - consider increasing cache size for better performance');
   }

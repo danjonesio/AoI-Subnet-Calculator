@@ -652,79 +652,127 @@ export function SubnetSplitter({
 
   return (
     <div ref={containerRef}>
+      {/* Live region for dynamic content updates */}
+      <div 
+        aria-live="polite" 
+        aria-atomic="false"
+        className="sr-only"
+        id="subnet-splitter-live-region"
+      >
+        {validation.errors.length > 0 && `Split validation failed: ${validation.errors[0]}`}
+        {validation.isValid && splitPreview.isValid && `Split will create ${splitPreview.subnetCount} subnets of size /${splitPreview.targetCidr}`}
+        {splitPreview.isValid && splitPreview.subnetCount > 100 && 'Large split operation may impact performance'}
+      </div>
+
       <Card className="w-full">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Scissors className="h-5 w-5" />
-              Split Subnet
+              <Scissors className="h-5 w-5" aria-hidden="true" />
+              <span id="subnet-splitter-title">Split Subnet</span>
             </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowKeyboardHelp(true)}
+              aria-label="Show keyboard shortcuts help dialog"
               title="Show keyboard shortcuts (Press ? for help)"
               data-action="show-help"
             >
-              <Keyboard className="h-4 w-4" />
+              <Keyboard className="h-4 w-4" aria-hidden="true" />
+              <span className="sr-only">Keyboard shortcuts</span>
             </Button>
           </CardTitle>
-          <CardDescription>
-            Divide {parentSubnet.network}{parentSubnet.cidr} into smaller subnets
-            {cloudMode !== 'normal' && ` (${cloudMode.toUpperCase()} mode)`}
+          <CardDescription id="subnet-splitter-description">
+            Divide {parentSubnet.network}{parentSubnet.cidr} into smaller subnets.
+            {cloudMode !== 'normal' && ` Operating in ${cloudMode.toUpperCase()} mode with cloud provider constraints.`}
+            {ipVersion === 'ipv6' ? ' IPv6 subnetting with 128-bit address space.' : ' IPv4 subnetting with 32-bit address space.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
         {/* Split Type Selector */}
         <div className="space-y-2">
-          <Label htmlFor="split-type">Split Type</Label>
+          <Label htmlFor="split-type" id="split-type-label">
+            Split Type
+          </Label>
           <Select 
             value={splitType} 
             onValueChange={handleSplitTypeChange}
             disabled={disabled}
+            aria-labelledby="split-type-label"
+            aria-describedby="split-type-description"
           >
-            <SelectTrigger>
+            <SelectTrigger id="split-type">
               <SelectValue placeholder="Select split type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="equal">Equal Split</SelectItem>
-              <SelectItem value="custom">Custom CIDR</SelectItem>
+              <SelectItem value="equal" aria-describedby="equal-split-description">
+                Equal Split
+              </SelectItem>
+              <SelectItem value="custom" aria-describedby="custom-split-description">
+                Custom CIDR
+              </SelectItem>
             </SelectContent>
           </Select>
+          <div id="split-type-description" className="sr-only">
+            Choose between equal splits (divide into equal-sized subnets) or custom CIDR (specify exact subnet size).
+          </div>
+          <div id="equal-split-description" className="sr-only">
+            Equal split divides the parent subnet into a specified number of equal-sized subnets.
+          </div>
+          <div id="custom-split-description" className="sr-only">
+            Custom CIDR allows you to specify the exact CIDR prefix length for the resulting subnets.
+          </div>
         </div>
 
         {/* Equal Split Options */}
         {splitType === 'equal' && (
           <div className="space-y-2">
-            <Label htmlFor="split-count">Number of Subnets</Label>
+            <Label htmlFor="split-count" id="split-count-label">
+              Number of Subnets
+            </Label>
             <Select 
               value={splitCount} 
               onValueChange={handleSplitCountChange}
               disabled={disabled}
+              aria-labelledby="split-count-label"
+              aria-describedby="split-count-description"
             >
-              <SelectTrigger>
+              <SelectTrigger id="split-count">
                 <SelectValue placeholder="Select number of subnets" />
               </SelectTrigger>
               <SelectContent>
                 {commonSplitOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
+                  <SelectItem 
+                    key={option.value} 
+                    value={option.value}
+                    aria-describedby={`split-option-${option.value}-description`}
+                  >
                     <div className="flex flex-col">
                       <span>{option.label}</span>
                       <span className="text-xs text-muted-foreground">
                         {option.description}
                       </span>
                     </div>
+                    <span id={`split-option-${option.value}-description`} className="sr-only">
+                      {option.description}. Creates {option.value} equal-sized subnets from the parent network.
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            <div id="split-count-description" className="sr-only">
+              Select the number of equal-sized subnets to create. Each option shows the resulting subnet count and description.
+            </div>
           </div>
         )}
 
         {/* Custom CIDR Input */}
         {splitType === 'custom' && (
           <div className="space-y-2">
-            <Label htmlFor="custom-cidr">Target CIDR Prefix</Label>
+            <Label htmlFor="custom-cidr" id="custom-cidr-label">
+              Target CIDR Prefix
+            </Label>
             <Input
               id="custom-cidr"
               type="number"
@@ -734,10 +782,18 @@ export function SubnetSplitter({
               onChange={(e) => handleCustomCidrChange(e.target.value)}
               placeholder={`Enter CIDR (${parentCidr + 1}-${ipVersion === 'ipv4' ? 32 : 128})`}
               disabled={disabled}
+              aria-labelledby="custom-cidr-label"
+              aria-describedby="custom-cidr-description custom-cidr-help"
+              aria-invalid={validation.errors.length > 0}
             />
-            <p className="text-xs text-muted-foreground">
+            <div id="custom-cidr-help" className="text-xs text-muted-foreground">
               Current parent subnet: /{parentCidr}. Target must be more specific (higher number).
-            </p>
+            </div>
+            <div id="custom-cidr-description" className="sr-only">
+              Enter a CIDR prefix length between {parentCidr + 1} and {ipVersion === 'ipv4' ? 32 : 128}. 
+              Higher numbers create smaller subnets with fewer IP addresses. 
+              For {ipVersion === 'ipv4' ? 'IPv4' : 'IPv6'}, the maximum prefix length is {ipVersion === 'ipv4' ? 32 : 128}.
+            </div>
           </div>
         )}
 

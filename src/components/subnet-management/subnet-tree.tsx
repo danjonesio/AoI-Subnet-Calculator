@@ -113,27 +113,43 @@ Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
           ${isFiltered ? 'bg-yellow-50 dark:bg-yellow-900/20' : ''}
         `}
         style={indentationStyle}
+        role="treeitem"
+        aria-expanded={hasChildren ? isExpanded : undefined}
+        aria-level={depth + 1}
+        aria-selected={isSelected}
+        aria-describedby={`tree-node-${subnet.id}-description`}
+        data-subnet-node={subnet.id}
       >
         {/* Expand/Collapse button */}
         <div className="flex items-center mr-2">
           {hasChildren ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 hover:bg-muted"
-              onClick={() => onExpandToggle(subnet.id)}
-              aria-label={isExpanded ? 'Collapse subnet' : 'Expand subnet'}
-            >
-              {isExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-            </Button>
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 hover:bg-muted"
+                onClick={() => onExpandToggle(subnet.id)}
+                aria-label={`${isExpanded ? 'Collapse' : 'Expand'} subnet ${subnet.network}/${subnet.cidr} with ${children.length} child subnet${children.length !== 1 ? 's' : ''}`}
+                aria-describedby={`expand-${subnet.id}-description`}
+              >
+                {isExpanded ? (
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                )}
+              </Button>
+              <span id={`expand-${subnet.id}-description`} className="sr-only">
+                {isExpanded ? 'Collapse to hide' : 'Expand to show'} {children.length} child subnet{children.length !== 1 ? 's' : ''} 
+                created by splitting this network.
+              </span>
+            </>
           ) : (
-            <div className="h-6 w-6 flex items-center justify-center">
+            <div className="h-6 w-6 flex items-center justify-center" aria-hidden="true">
               {showRelationships && depth > 0 && (
-                <div className="h-2 w-2 rounded-full bg-muted-foreground/30" />
+                <div 
+                  className="h-2 w-2 rounded-full bg-muted-foreground/30" 
+                  aria-label="Child subnet indicator"
+                />
               )}
             </div>
           )}
@@ -147,61 +163,91 @@ Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
               onCheckedChange={(checked) => 
                 onSelectionChange(subnet.id, checked as boolean)
               }
-              aria-label={`Select subnet ${subnet.network}/${subnet.cidr}`}
+              aria-label={`Select subnet ${subnet.network}/${subnet.cidr} with ${subnet.usableHosts.toLocaleString()} usable hosts${hasChildren ? ` and ${children.length} child subnet${children.length !== 1 ? 's' : ''}` : ''}`}
+              aria-describedby={`tree-select-${subnet.id}-description`}
             />
+            <span id={`tree-select-${subnet.id}-description`} className="sr-only">
+              {isSelected ? 'Selected' : 'Not selected'} for operations. 
+              {hasChildren ? `Parent subnet with ${children.length} child subnet${children.length !== 1 ? 's' : ''}.` : 'Leaf subnet with no children.'}
+              Hierarchy level {depth + 1}.
+            </span>
           </div>
         )}
 
         {/* Subnet icon */}
         <div className="mr-2 flex-shrink-0">
-          <Network className={`h-4 w-4 ${hasChildren ? 'text-primary' : 'text-muted-foreground'}`} />
+          <Network 
+            className={`h-4 w-4 ${hasChildren ? 'text-primary' : 'text-muted-foreground'}`} 
+            aria-hidden="true"
+          />
         </div>
 
         {/* Subnet information */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center space-x-3">
-            <div className="font-mono text-sm font-medium">
+            <div className="font-mono text-sm font-medium" aria-label={`Network address ${subnet.network} with CIDR prefix ${subnet.cidr}`}>
               {subnet.network}/{subnet.cidr}
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-xs text-muted-foreground" aria-label={`${subnet.usableHosts.toLocaleString()} usable host addresses`}>
               {subnet.usableHosts.toLocaleString()} hosts
             </div>
             {showRelationships && subnet.parentId && (
-              <div className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+              <div 
+                className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded"
+                aria-label={`Hierarchy level ${subnet.level}`}
+              >
                 Level {subnet.level}
               </div>
             )}
           </div>
-          <div className="text-xs text-muted-foreground mt-1">
+          <div className="text-xs text-muted-foreground mt-1" aria-label={`IP address range from ${subnet.firstHost} to ${subnet.lastHost}`}>
             {subnet.firstHost} - {subnet.lastHost}
           </div>
         </div>
 
         {/* Actions */}
         {showActions && (
-          <div className="flex items-center space-x-1 ml-2">
+          <div className="flex items-center space-x-1 ml-2" role="group" aria-label={`Actions for subnet ${subnet.network}/${subnet.cidr}`}>
             <Button
               variant="ghost"
               size="sm"
               className="h-8 w-8 p-0"
               onClick={() => handleCopySubnet(subnet)}
-              title="Copy subnet information"
+              aria-label={`Copy information for subnet ${subnet.network}/${subnet.cidr} to clipboard`}
+              aria-describedby={`tree-copy-${subnet.id}-description`}
             >
-              <Copy className="h-3 w-3" />
+              <Copy className="h-3 w-3" aria-hidden="true" />
             </Button>
+            <span id={`tree-copy-${subnet.id}-description`} className="sr-only">
+              Copies network details, IP ranges, and host count information to clipboard in formatted text.
+            </span>
             {onSubnetDetails && (
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0"
                 onClick={() => onSubnetDetails(subnet)}
-                title="View subnet details"
+                aria-label={`View detailed information for subnet ${subnet.network}/${subnet.cidr}`}
+                aria-describedby={`tree-details-${subnet.id}-description`}
               >
-                <Info className="h-3 w-3" />
+                <Info className="h-3 w-3" aria-hidden="true" />
               </Button>
             )}
+            <span id={`tree-details-${subnet.id}-description`} className="sr-only">
+              Opens detailed view with comprehensive subnet information and configuration options.
+            </span>
           </div>
         )}
+
+        {/* Screen reader description for the entire tree node */}
+        <span id={`tree-node-${subnet.id}-description`} className="sr-only">
+          Subnet {subnet.network} slash {subnet.cidr} at hierarchy level {depth + 1}. 
+          Contains {subnet.totalHosts.toLocaleString()} total addresses with {subnet.usableHosts.toLocaleString()} usable for devices. 
+          IP range spans from {subnet.firstHost} to {subnet.lastHost}.
+          {hasChildren ? ` Parent subnet with ${children.length} child subnet${children.length !== 1 ? 's' : ''}.` : ' Leaf subnet with no child subnets.'}
+          {subnet.parentId ? ' Created by splitting a larger parent network.' : ' Root level subnet.'}
+          {isFiltered ? ' Matches current search filter.' : ''}
+        </span>
       </div>
 
       {/* Child nodes */}
@@ -629,13 +675,35 @@ const SubnetTree = memo<SubnetTreeProps>(({
 
   return (
     <div ref={containerRef}>
+      {/* Live region for dynamic content updates */}
+      <div 
+        aria-live="polite" 
+        aria-atomic="false"
+        className="sr-only"
+        id="subnet-tree-live-region"
+      >
+        {internalFilterText && `Showing ${filteredHierarchy.reduce((count, node) => {
+          const countNodes = (n: SubnetHierarchy): number => {
+            return 1 + n.children.reduce((sum, child) => sum + countNodes(child), 0);
+          };
+          return count + countNodes(node);
+        }, 0)} of ${subnets.length} subnets matching "${internalFilterText}"`}
+        {selectedSubnets.size > 0 && `${selectedSubnets.size} of ${subnets.length} subnets selected in hierarchy`}
+        {internalExpandedNodes.size > 0 && `${internalExpandedNodes.size} nodes expanded in tree view`}
+      </div>
+
       <Card className={className}>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Subnet Hierarchy ({subnets.length} subnets)</span>
+            <span id="subnet-tree-title">
+              Subnet Hierarchy ({subnets.length} subnet{subnets.length !== 1 ? 's' : ''})
+            </span>
             <div className="flex items-center gap-2">
               {showSelection && selectedSubnets.size > 0 && (
-                <span className="text-sm font-normal text-muted-foreground">
+                <span 
+                  className="text-sm font-normal text-muted-foreground"
+                  aria-label={`${selectedSubnets.size} of ${subnets.length} subnets selected in hierarchy`}
+                >
                   {selectedSubnets.size} selected
                 </span>
               )}
@@ -643,10 +711,12 @@ const SubnetTree = memo<SubnetTreeProps>(({
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowKeyboardHelp(true)}
+                aria-label="Show keyboard shortcuts help dialog"
                 title="Show keyboard shortcuts (Press ? for help)"
                 data-action="show-help"
               >
-                <Keyboard className="h-4 w-4" />
+                <Keyboard className="h-4 w-4" aria-hidden="true" />
+                <span className="sr-only">Keyboard shortcuts</span>
               </Button>
             </div>
           </CardTitle>
@@ -726,7 +796,19 @@ const SubnetTree = memo<SubnetTreeProps>(({
         )}
 
         {/* Tree View */}
-        <div className="space-y-1 max-h-96 overflow-y-auto">
+        <div 
+          className="space-y-1 max-h-96 overflow-y-auto"
+          role="tree"
+          aria-label="Subnet hierarchy tree"
+          aria-describedby="subnet-tree-description"
+          aria-multiselectable={showSelection}
+        >
+          <div id="subnet-tree-description" className="sr-only">
+            Hierarchical view of {subnets.length} subnet{subnets.length !== 1 ? 's' : ''} showing parent-child relationships. 
+            {showSelection ? 'Use checkboxes to select subnets for operations. ' : ''}
+            Use arrow keys to navigate, Enter or Space to expand/collapse nodes.
+            {internalFilterText ? ` Currently filtered to show matching subnets for "${internalFilterText}".` : ''}
+          </div>
           {filteredHierarchy.length > 0 ? (
             filteredHierarchy.map((node) => (
               <TreeNode
@@ -745,17 +827,18 @@ const SubnetTree = memo<SubnetTreeProps>(({
               />
             ))
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-8 text-muted-foreground" role="status" aria-live="polite">
               {internalFilterText ? (
                 <>
-                  <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <Search className="h-12 w-12 mx-auto mb-4 opacity-50" aria-hidden="true" />
                   <p>No subnets match your search criteria</p>
                   <p className="text-sm mt-2">Try adjusting your search terms</p>
                 </>
               ) : (
                 <>
-                  <Network className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <Network className="h-12 w-12 mx-auto mb-4 opacity-50" aria-hidden="true" />
                   <p>No subnet hierarchy to display</p>
+                  <p className="text-sm mt-2">Split a subnet to see the hierarchy</p>
                 </>
               )}
             </div>

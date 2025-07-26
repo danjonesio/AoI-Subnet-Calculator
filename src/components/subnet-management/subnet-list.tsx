@@ -570,13 +570,31 @@ export const SubnetList = memo<SubnetListProps>(({
 
   return (
     <div ref={containerRef}>
+      {/* Live region for dynamic content updates */}
+      <div 
+        aria-live="polite" 
+        aria-atomic="false"
+        className="sr-only"
+        id="subnet-list-live-region"
+      >
+        {copyFeedback && copyFeedback.type === 'success' && 'Subnet information copied successfully'}
+        {copyFeedback && copyFeedback.type === 'error' && 'Failed to copy subnet information'}
+        {internalFilterText && sortedAndFilteredSubnets.length !== subnets.length && `Filter applied: ${sortedAndFilteredSubnets.length} results found`}
+        {selectedSubnets.size > 0 && `Selection updated: ${selectedSubnets.size} subnets selected`}
+      </div>
+
       <Card className={className}>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Subnet List ({subnets.length} subnets)</span>
+            <span id="subnet-list-title">
+              Subnet List ({subnets.length} subnet{subnets.length !== 1 ? 's' : ''})
+            </span>
             <div className="flex items-center gap-2">
               {showSelection && selectedSubnets.size > 0 && (
-                <span className="text-sm font-normal text-muted-foreground">
+                <span 
+                  className="text-sm font-normal text-muted-foreground"
+                  aria-label={`${selectedSubnets.size} of ${subnets.length} subnets selected`}
+                >
                   {selectedSubnets.size} selected
                 </span>
               )}
@@ -584,10 +602,12 @@ export const SubnetList = memo<SubnetListProps>(({
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowKeyboardHelp(true)}
+                aria-label="Show keyboard shortcuts help dialog"
                 title="Show keyboard shortcuts (Press ? for help)"
                 data-action="show-help"
               >
-                <Keyboard className="h-4 w-4" />
+                <Keyboard className="h-4 w-4" aria-hidden="true" />
+                <span className="sr-only">Keyboard shortcuts</span>
               </Button>
             </div>
           </CardTitle>
@@ -632,137 +652,204 @@ export const SubnetList = memo<SubnetListProps>(({
 
         {/* Desktop Table View */}
         <div className="hidden md:block rounded-md border overflow-x-auto">
-          <Table>
+          <Table role="table" aria-label="Subnet list table">
             <TableHeader>
-              <TableRow>
+              <TableRow role="row">
                 {showSelection && (
-                  <TableHead className="w-12">
+                  <TableHead className="w-12" role="columnheader">
                     <Checkbox
                       checked={allSelected}
                       onCheckedChange={handleSelectAll}
-                      aria-label="Select all subnets"
+                      aria-label={`Select all ${subnets.length} subnets. Currently ${selectedSubnets.size} of ${subnets.length} subnets selected.`}
+                      aria-describedby="select-all-description"
                       className={someSelected ? 'data-[state=checked]:bg-primary/50' : ''}
                     />
+                    <span id="select-all-description" className="sr-only">
+                      {allSelected ? 'All subnets are selected' : 
+                       someSelected ? `${selectedSubnets.size} of ${subnets.length} subnets are selected` :
+                       'No subnets are selected'}
+                    </span>
                   </TableHead>
                 )}
-                <TableHead>
+                <TableHead role="columnheader">
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-auto p-0 font-semibold hover:bg-transparent"
                     onClick={() => handleSort('network')}
+                    aria-label={`Sort by network address. Currently sorted ${internalSortBy === 'network' ? `${internalSortOrder}ending` : 'unsorted'}`}
+                    aria-describedby="network-sort-description"
                   >
                     Network
                     {renderSortIcon('network')}
                   </Button>
+                  <span id="network-sort-description" className="sr-only">
+                    Network addresses in CIDR notation. Click to sort by network address.
+                  </span>
                 </TableHead>
-                <TableHead>
+                <TableHead role="columnheader">
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-auto p-0 font-semibold hover:bg-transparent"
                     onClick={() => handleSort('cidr')}
+                    aria-label={`Sort by CIDR prefix length. Currently sorted ${internalSortBy === 'cidr' ? `${internalSortOrder}ending` : 'unsorted'}`}
+                    aria-describedby="cidr-sort-description"
                   >
                     CIDR
                     {renderSortIcon('cidr')}
                   </Button>
+                  <span id="cidr-sort-description" className="sr-only">
+                    CIDR prefix length indicating subnet size. Lower numbers mean larger subnets.
+                  </span>
                 </TableHead>
-                <TableHead>
+                <TableHead role="columnheader">
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-auto p-0 font-semibold hover:bg-transparent"
                     onClick={() => handleSort('usableHosts')}
+                    aria-label={`Sort by usable hosts count. Currently sorted ${internalSortBy === 'usableHosts' ? `${internalSortOrder}ending` : 'unsorted'}`}
+                    aria-describedby="hosts-sort-description"
                   >
                     Usable Hosts
                     {renderSortIcon('usableHosts')}
                   </Button>
+                  <span id="hosts-sort-description" className="sr-only">
+                    Number of IP addresses available for devices, excluding network and broadcast addresses.
+                  </span>
                 </TableHead>
-                <TableHead className="hidden lg:table-cell">
+                <TableHead className="hidden lg:table-cell" role="columnheader">
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-auto p-0 font-semibold hover:bg-transparent"
                     onClick={() => handleSort('firstHost')}
+                    aria-label={`Sort by first host IP address. Currently sorted ${internalSortBy === 'firstHost' ? `${internalSortOrder}ending` : 'unsorted'}`}
+                    aria-describedby="first-host-sort-description"
                   >
                     First Host
                     {renderSortIcon('firstHost')}
                   </Button>
+                  <span id="first-host-sort-description" className="sr-only">
+                    First usable IP address in the subnet range.
+                  </span>
                 </TableHead>
-                <TableHead className="hidden lg:table-cell">
+                <TableHead className="hidden lg:table-cell" role="columnheader">
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-auto p-0 font-semibold hover:bg-transparent"
                     onClick={() => handleSort('lastHost')}
+                    aria-label={`Sort by last host IP address. Currently sorted ${internalSortBy === 'lastHost' ? `${internalSortOrder}ending` : 'unsorted'}`}
+                    aria-describedby="last-host-sort-description"
                   >
                     Last Host
                     {renderSortIcon('lastHost')}
                   </Button>
+                  <span id="last-host-sort-description" className="sr-only">
+                    Last usable IP address in the subnet range.
+                  </span>
                 </TableHead>
                 {showActions && (
-                  <TableHead className="w-24">Actions</TableHead>
+                  <TableHead className="w-24" role="columnheader">
+                    <span aria-describedby="actions-description">Actions</span>
+                    <span id="actions-description" className="sr-only">
+                      Available actions for each subnet including copy and view details.
+                    </span>
+                  </TableHead>
                 )}
               </TableRow>
             </TableHeader>
-            <TableBody>
-              {sortedAndFilteredSubnets.map((subnet) => (
+            <TableBody role="rowgroup">
+              {sortedAndFilteredSubnets.map((subnet, index) => (
                 <TableRow 
                   key={subnet.id}
+                  role="row"
                   className={selectedSubnets.has(subnet.id) ? 'bg-muted/50' : ''}
+                  aria-selected={selectedSubnets.has(subnet.id)}
+                  aria-describedby={`subnet-${subnet.id}-description`}
                 >
                   {showSelection && (
-                    <TableCell>
+                    <TableCell role="gridcell">
                       <Checkbox
                         checked={selectedSubnets.has(subnet.id)}
                         onCheckedChange={(checked) => 
                           handleSubnetSelection(subnet.id, checked as boolean)
                         }
-                        aria-label={`Select subnet ${subnet.network}/${subnet.cidr}`}
+                        aria-label={`Select subnet ${subnet.network}/${subnet.cidr} with ${subnet.usableHosts.toLocaleString()} usable hosts`}
+                        aria-describedby={`subnet-${subnet.id}-selection-description`}
                       />
+                      <span id={`subnet-${subnet.id}-selection-description`} className="sr-only">
+                        {selectedSubnets.has(subnet.id) ? 'Selected' : 'Not selected'}. 
+                        Subnet {index + 1} of {sortedAndFilteredSubnets.length}.
+                        Network range from {subnet.firstHost} to {subnet.lastHost}.
+                      </span>
                     </TableCell>
                   )}
-                  <TableCell className="font-mono text-sm">
-                    {subnet.network}
+                  <TableCell className="font-mono text-sm" role="gridcell">
+                    <span aria-label={`Network address ${subnet.network}`}>
+                      {subnet.network}
+                    </span>
                   </TableCell>
-                  <TableCell className="font-mono text-sm">
-                    /{subnet.cidr}
+                  <TableCell className="font-mono text-sm" role="gridcell">
+                    <span aria-label={`CIDR prefix length ${subnet.cidr}`}>
+                      /{subnet.cidr}
+                    </span>
                   </TableCell>
-                  <TableCell className="text-sm">
-                    {subnet.usableHosts.toLocaleString()}
+                  <TableCell className="text-sm" role="gridcell">
+                    <span aria-label={`${subnet.usableHosts.toLocaleString()} usable host addresses`}>
+                      {subnet.usableHosts.toLocaleString()}
+                    </span>
                   </TableCell>
-                  <TableCell className="font-mono text-sm hidden lg:table-cell">
-                    {subnet.firstHost}
+                  <TableCell className="font-mono text-sm hidden lg:table-cell" role="gridcell">
+                    <span aria-label={`First host IP address ${subnet.firstHost}`}>
+                      {subnet.firstHost}
+                    </span>
                   </TableCell>
-                  <TableCell className="font-mono text-sm hidden lg:table-cell">
-                    {subnet.lastHost}
+                  <TableCell className="font-mono text-sm hidden lg:table-cell" role="gridcell">
+                    <span aria-label={`Last host IP address ${subnet.lastHost}`}>
+                      {subnet.lastHost}
+                    </span>
                   </TableCell>
                   {showActions && (
-                    <TableCell>
-                      <div className="flex space-x-1">
+                    <TableCell role="gridcell">
+                      <div className="flex space-x-1" role="group" aria-label={`Actions for subnet ${subnet.network}/${subnet.cidr}`}>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleCopySubnet(subnet)}
-                          title="Copy subnet information"
+                          aria-label={`Copy information for subnet ${subnet.network}/${subnet.cidr} to clipboard`}
+                          aria-describedby={`copy-${subnet.id}-description`}
                           disabled={copyingSubnet === subnet.id}
                         >
                           {copyingSubnet === subnet.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                           ) : (
-                            <Copy className="h-4 w-4" />
+                            <Copy className="h-4 w-4" aria-hidden="true" />
                           )}
+                          <span className="sr-only">
+                            {copyingSubnet === subnet.id ? 'Copying subnet information...' : 'Copy subnet information'}
+                          </span>
                         </Button>
+                        <span id={`copy-${subnet.id}-description`} className="sr-only">
+                          Copies network details, IP ranges, and host count information to clipboard.
+                        </span>
                         {onSubnetDetails && (
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => onSubnetDetails(subnet)}
-                            title="View subnet details"
+                            aria-label={`View detailed information for subnet ${subnet.network}/${subnet.cidr}`}
+                            aria-describedby={`details-${subnet.id}-description`}
                           >
-                            <Info className="h-4 w-4" />
+                            <Info className="h-4 w-4" aria-hidden="true" />
+                            <span className="sr-only">View subnet details</span>
                           </Button>
                         )}
+                        <span id={`details-${subnet.id}-description`} className="sr-only">
+                          Opens detailed view with comprehensive subnet information and configuration options.
+                        </span>
                       </div>
                     </TableCell>
                   )}
@@ -770,6 +857,19 @@ export const SubnetList = memo<SubnetListProps>(({
               ))}
             </TableBody>
           </Table>
+          
+          {/* Screen reader descriptions for subnets - outside table structure */}
+          <div className="sr-only">
+            {sortedAndFilteredSubnets.map((subnet, index) => (
+              <div key={`desc-${subnet.id}`} id={`subnet-${subnet.id}-description`}>
+                Subnet {subnet.network} slash {subnet.cidr} contains {subnet.totalHosts.toLocaleString()} total addresses 
+                with {subnet.usableHosts.toLocaleString()} usable for devices. 
+                IP range spans from {subnet.firstHost} to {subnet.lastHost}.
+                {subnet.parentId ? ` This is a child subnet created from splitting a larger network.` : ''}
+                {subnet.level > 0 ? ` Hierarchy level ${subnet.level}.` : ''}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* No results message */}

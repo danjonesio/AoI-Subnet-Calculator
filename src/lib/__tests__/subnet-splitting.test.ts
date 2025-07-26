@@ -354,9 +354,8 @@ describe('IPv4 Subnet Splitting', () => {
     });
 
     test('should set correct hierarchy information', () => {
-      const parentSubnet = createTestSubnet('192.168.1.0', '/24');
+      const parentSubnet = createTestSubnet('192.168.1.0', '/24', undefined, 'parent-subnet-id');
       parentSubnet.level = 1;
-      parentSubnet.id = 'parent-subnet-id';
       
       const splitOptions: SplitOptions = {
         splitType: 'equal',

@@ -223,8 +223,8 @@ describe('SubnetTree', () => {
       />
     );
 
-    const copyButtons = screen.getAllByTitle('Copy subnet information');
-    const detailsButtons = screen.getAllByTitle('View subnet details');
+    const copyButtons = screen.getAllByLabelText(/Copy information for subnet .* to clipboard/);
+    const detailsButtons = screen.getAllByLabelText(/View detailed information for subnet .*/)
     
     expect(copyButtons.length).toBeGreaterThan(0);
     expect(detailsButtons.length).toBeGreaterThan(0);
@@ -248,7 +248,7 @@ describe('SubnetTree', () => {
       />
     );
 
-    const copyButton = screen.getAllByTitle('Copy subnet information')[0];
+    const copyButton = screen.getAllByLabelText(/Copy information for subnet .* to clipboard/)[0];
     fireEvent.click(copyButton);
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
