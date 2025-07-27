@@ -523,7 +523,7 @@ describe('SubnetErrorBoundary Security Integration Tests', () => {
     it('should handle missing window object gracefully', () => {
       // Simulate server-side rendering
       const originalWindow = global.window;
-      delete (global as any).window;
+      delete (global as unknown as { window: unknown }).window;
 
       // Should not throw error
       expect(() => {
