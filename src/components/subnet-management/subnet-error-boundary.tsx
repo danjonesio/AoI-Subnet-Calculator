@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, RefreshCw, Bug, Network, Calculator, Database } from "lucide-react";
 import { SubnetError, SubnetErrorType } from "@/lib/types";
+import { navigateSecurely, reloadSecurely, validateInternalURL, SUBNET_CALCULATOR_SECURITY_CONFIG } from "@/lib/url-security";
 
 interface Props {
   children: ReactNode;
@@ -182,6 +183,27 @@ function logSubnetError(error: Error, errorInfo: ErrorInfo, context?: string, er
   // Example: sendToErrorService(errorDetails);
 }
 
+// Security event logging for navigation attempts
+function logSecurityNavigationEvent(action: string, originalPath?: string, sanitizedPath?: string) {
+  const securityEvent = {
+    type: 'navigation_security_event',
+    action,
+    originalPath,
+    sanitizedPath,
+    timestamp: new Date().toISOString(),
+    userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'Unknown',
+    currentUrl: typeof window !== 'undefined' ? window.location.href : 'Unknown'
+  };
+
+  // Log security events for monitoring
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[SECURITY] Navigation Event:', securityEvent);
+  }
+
+  // In production, this would be sent to security monitoring service
+  // Example: sendToSecurityService(securityEvent);
+}
+
 export class SubnetErrorBoundary extends Component<Props, State> {
   private maxRetries = 3;
 
@@ -241,9 +263,33 @@ export class SubnetErrorBoundary extends Component<Props, State> {
   };
 
   handleRefreshPage = () => {
-    if (typeof window !== 'undefined') {
-      window.location.reload();
-    }
+    // Log security event for refresh action
+    const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
+    const validation = validateInternalURL(currentPath);
+    
+    logSecurityNavigationEvent(
+      'refresh_page',
+      currentPath,
+      validation.sanitizedPath
+    );
+
+    // Use secure reload function that validates current path
+    reloadSecurely();
+  };
+
+  handleSecureStartOver = () => {
+    // Log security event for start over action
+    const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
+    const fallbackPath = SUBNET_CALCULATOR_SECURITY_CONFIG.fallbackPath;
+    
+    logSecurityNavigationEvent(
+      'start_over',
+      currentPath,
+      fallbackPath
+    );
+
+    // Navigate to the application root using secure navigation
+    navigateSecurely(fallbackPath);
   };
 
   render() {
@@ -340,7 +386,7 @@ export class SubnetErrorBoundary extends Component<Props, State> {
 
                 {!this.state.isRecoverable && (
                   <Button 
-                    onClick={() => window.location.href = window.location.pathname}
+                    onClick={this.handleSecureStartOver}
                     variant="outline"
                   >
                     Start Over
