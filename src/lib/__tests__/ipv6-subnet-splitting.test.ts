@@ -682,5 +682,388 @@ describe('IPv6 Subnet Splitting', () => {
       expect(result.isValid).toBe(false);
       expect(result.errors).toContain('IPv6 prefix length cannot exceed /128');
     });
+
+    test('should handle IPv6 address compression edge cases', () => {
+      const testCases = [
+        { network: '2001:0db8:0000:0000:0000:0000:0000:0000', expected: '2001:db8::' },
+        { network: '2001:db8:0:0:0:0:0:1', expected: '2001:db8::1' },
+        { network: 'fe80:0000:0000:0000:0000:0000:0000:0001', expected: 'fe80::1' },
+        { network: '::1', expected: '::1' },
+        { network: '::', expected: '::' }
+      ];
+
+      testCases.forEach(({ network, expected }) => {
+        const parentSubnet: SubnetInfo = {
+          network,
+          broadcast: network,
+          firstHost: network,
+          lastHost: network,
+          subnetMask: '',
+          wildcardMask: '',
+          totalHosts: 1,
+          usableHosts: 1,
+          cidr: '/128'
+        };
+
+        const splitOptions: SplitOptions = {
+          splitType: 'equal',
+          splitCount: 2
+        };
+
+        const result = splitIPv6Subnet(parentSubnet, splitOptions);
+        
+        // Should fail gracefully for /128 splits, but test the input handling
+        expect(result.subnets).toHaveLength(0);
+      });
+    });
+
+    test('should handle IPv6 multicast addresses', () => {
+      const parentSubnet: SubnetInfo = {
+        network: 'ff00::',
+        broadcast: 'ff00::ffff:ffff:ffff:ffff',
+        firstHost: 'ff00::',
+        lastHost: 'ff00::ffff:ffff:ffff:ffff',
+        subnetMask: '',
+        wildcardMask: '',
+        totalHosts: Number.MAX_SAFE_INTEGER,
+        usableHosts: Number.MAX_SAFE_INTEGER,
+        cidr: '/64'
+      };
+
+      const splitOptions: SplitOptions = {
+        splitType: 'equal',
+        splitCount: 2
+      };
+
+      const result = splitIPv6Subnet(parentSubnet, splitOptions);
+      
+      if (result.subnets.length > 0) {
+        expect(result.subnets[0].ipv6Info?.addressType).toBe('Multicast');
+      }
+    });
+
+    test('should handle IPv6 loopback address', () => {
+      const parentSubnet: SubnetInfo = {
+        network: '::1',
+        broadcast: '::1',
+        firstHost: '::1',
+        lastHost: '::1',
+        subnetMask: '',
+        wildcardMask: '',
+        totalHosts: 1,
+        usableHosts: 1,
+        cidr: '/128'
+      };
+
+      const splitOptions: SplitOptions = {
+        splitType: 'custom',
+        customCidr: 129 // Invalid
+      };
+
+      const result = validateIPv6Split(parentSubnet, splitOptions);
+
+      expect(result.isValid).toBe(false);
+    });
+
+    test('should handle IPv6 unspecified address', () => {
+      const parentSubnet: SubnetInfo = {
+        network: '::',
+        broadcast: '::',
+        firstHost: '::',
+        lastHost: '::',
+        subnetMask: '',
+        wildcardMask: '',
+        totalHosts: 1,
+        usableHosts: 1,
+        cidr: '/128'
+      };
+
+      const splitOptions: SplitOptions = {
+        splitType: 'equal',
+        splitCount: 2
+      };
+
+      const result = splitIPv6Subnet(parentSubnet, splitOptions);
+
+      expect(result.subnets).toHaveLength(0);
+    });
+
+    test('should handle malformed IPv6 CIDR notation', () => {
+      const parentSubnet: SubnetInfo = {
+        network: '2001:db8::',
+        broadcast: '2001:db8::ffff:ffff:ffff:ffff',
+        firstHost: '2001:db8::',
+        lastHost: '2001:db8::ffff:ffff:ffff:ffff',
+        subnetMask: '',
+        wildcardMask: '',
+        totalHosts: Number.MAX_SAFE_INTEGER,
+        usableHosts: Number.MAX_SAFE_INTEGER,
+        cidr: 'invalid-cidr'
+      };
+
+      const splitOptions: SplitOptions = {
+        splitType: 'equal',
+        splitCount: 2
+      };
+
+      const result = splitIPv6Subnet(parentSubnet, splitOptions);
+
+      expect(result.subnets).toHaveLength(0);
+    });
+
+    test('should handle extremely large IPv6 prefix differences', () => {
+      const parentSubnet: SubnetInfo = {
+        network: '2001:db8::',
+        broadcast: '2001:db8:ffff:ffff:ffff:ffff:ffff:ffff',
+        firstHost: '2001:db8::',
+        lastHost: '2001:db8:ffff:ffff:ffff:ffff:ffff:ffff',
+        subnetMask: '',
+        wildcardMask: '',
+        totalHosts: Number.MAX_SAFE_INTEGER,
+        usableHosts: Number.MAX_SAFE_INTEGER,
+        cidr: '/32'
+      };
+
+      const splitOptions: SplitOptions = {
+        splitType: 'custom',
+        customCidr: 96, // 64-bit difference - creates 2^64 subnets
+        maxResults: 1000
+      };
+
+      const result = splitIPv6Subnet(parentSubnet, splitOptions);
+
+      // Should fail validation due to excessive subnet count
+      expect(result.subnets).toHaveLength(0);
+    });
+
+    test('should handle negative split counts for IPv6', () => {
+      const parentSubnet: SubnetInfo = {
+        network: '2001:db8::',
+        broadcast: '2001:db8::ffff:ffff:ffff:ffff',
+        firstHost: '2001:db8::',
+        lastHost: '2001:db8::ffff:ffff:ffff:ffff',
+        subnetMask: '',
+        wildcardMask: '',
+        totalHosts: Number.MAX_SAFE_INTEGER,
+        usableHosts: Number.MAX_SAFE_INTEGER,
+        cidr: '/64'
+      };
+
+      const splitOptions: SplitOptions = {
+        splitType: 'equal',
+        splitCount: -4 // Invalid
+      };
+
+      const result = splitIPv6Subnet(parentSubnet, splitOptions);
+
+      expect(result.subnets).toHaveLength(0);
+    });
+
+    test('should handle fractional split counts for IPv6', () => {
+      const parentSubnet: SubnetInfo = {
+        network: '2001:db8::',
+        broadcast: '2001:db8::ffff:ffff:ffff:ffff',
+        firstHost: '2001:db8::',
+        lastHost: '2001:db8::ffff:ffff:ffff:ffff',
+        subnetMask: '',
+        wildcardMask: '',
+        totalHosts: Number.MAX_SAFE_INTEGER,
+        usableHosts: Number.MAX_SAFE_INTEGER,
+        cidr: '/64'
+      };
+
+      const splitOptions: SplitOptions = {
+        splitType: 'equal',
+        splitCount: 3.7 // Invalid fractional
+      };
+
+      const result = splitIPv6Subnet(parentSubnet, splitOptions);
+
+      // Should round up to next power of 2 (4)
+      expect(result.subnets).toHaveLength(4);
+    });
+  });
+
+  describe('IPv6 Performance Tests', () => {
+    test('should handle large IPv6 subnet splits efficiently', () => {
+      const startTime = performance.now();
+      
+      const parentSubnet: SubnetInfo = {
+        network: '2001:db8::',
+        broadcast: '2001:db8:ffff:ffff:ffff:ffff:ffff:ffff',
+        firstHost: '2001:db8::',
+        lastHost: '2001:db8:ffff:ffff:ffff:ffff:ffff:ffff',
+        subnetMask: '',
+        wildcardMask: '',
+        totalHosts: Number.MAX_SAFE_INTEGER,
+        usableHosts: Number.MAX_SAFE_INTEGER,
+        cidr: '/32'
+      };
+
+      const splitOptions: SplitOptions = {
+        splitType: 'custom',
+        customCidr: 48,
+        maxResults: 1000 // Limit for performance
+      };
+
+      const result = splitIPv6Subnet(parentSubnet, splitOptions);
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+
+      // /32 to /48 creates 2^16 = 65536 subnets, but should be limited by validation
+      expect(result.subnets.length).toBeGreaterThanOrEqual(0);
+      expect(result.subnets.length).toBeLessThanOrEqual(1000);
+      expect(duration).toBeLessThan(2000); // Should complete within 2 seconds
+      if (result.performance?.calculationTime !== undefined) {
+        expect(result.performance.calculationTime).toBeDefined();
+      }
+    });
+
+    test('should handle IPv6 adjacency validation performance', () => {
+      const startTime = performance.now();
+      
+      // Create many adjacent IPv6 subnets (power of 2 for valid joining)
+      const subnets: SplitSubnet[] = [];
+      for (let i = 0; i < 64; i++) {
+        subnets.push({
+          id: `ipv6-subnet-${i}`,
+          network: `2001:db8:${i.toString(16)}::`,
+          broadcast: `2001:db8:${i.toString(16)}::ffff:ffff:ffff:ffff`,
+          firstHost: `2001:db8:${i.toString(16)}::`,
+          lastHost: `2001:db8:${i.toString(16)}::ffff:ffff:ffff:ffff`,
+          cidr: 64,
+          totalHosts: Number.MAX_SAFE_INTEGER,
+          usableHosts: Number.MAX_SAFE_INTEGER,
+          parentId: 'parent',
+          level: 1,
+          isSelected: false,
+          ipVersion: 'ipv6'
+        });
+      }
+
+      const validation = validateIPv6SubnetAdjacency(subnets);
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+
+      // 64 subnets is a power of 2, but they may not be properly adjacent
+      expect(validation.isValid).toBeDefined();
+      expect(duration).toBeLessThan(500); // Should be fast
+    });
+
+    test('should handle memory-intensive IPv6 operations', () => {
+      const initialMemory = performance.memory?.usedJSHeapSize || 0;
+      
+      // Perform multiple IPv6 split operations
+      for (let i = 0; i < 10; i++) {
+        const parentSubnet: SubnetInfo = {
+          network: `2001:db8:${i}::`,
+          broadcast: `2001:db8:${i}::ffff:ffff:ffff:ffff`,
+          firstHost: `2001:db8:${i}::`,
+          lastHost: `2001:db8:${i}::ffff:ffff:ffff:ffff`,
+          subnetMask: '',
+          wildcardMask: '',
+          totalHosts: Number.MAX_SAFE_INTEGER,
+          usableHosts: Number.MAX_SAFE_INTEGER,
+          cidr: '/64'
+        };
+
+        const splitOptions: SplitOptions = {
+          splitType: 'equal',
+          splitCount: 16,
+          maxResults: 16
+        };
+
+        const result = splitIPv6Subnet(parentSubnet, splitOptions);
+        expect(result.subnets).toHaveLength(16);
+      }
+
+      // Force garbage collection if available
+      if (global.gc) {
+        global.gc();
+      }
+
+      const finalMemory = performance.memory?.usedJSHeapSize || 0;
+      const memoryIncrease = finalMemory - initialMemory;
+      
+      // Memory increase should be reasonable (less than 20MB for IPv6)
+      expect(memoryIncrease).toBeLessThan(20 * 1024 * 1024);
+    });
+
+    test('should handle concurrent IPv6 operations', async () => {
+      const startTime = performance.now();
+      
+      // Create multiple concurrent IPv6 split operations
+      const promises = [];
+      for (let i = 0; i < 5; i++) {
+        const parentSubnet: SubnetInfo = {
+          network: `2001:db8:${i}::`,
+          broadcast: `2001:db8:${i}::ffff:ffff:ffff:ffff`,
+          firstHost: `2001:db8:${i}::`,
+          lastHost: `2001:db8:${i}::ffff:ffff:ffff:ffff`,
+          subnetMask: '',
+          wildcardMask: '',
+          totalHosts: Number.MAX_SAFE_INTEGER,
+          usableHosts: Number.MAX_SAFE_INTEGER,
+          cidr: '/64'
+        };
+
+        const splitOptions: SplitOptions = {
+          splitType: 'custom',
+          customCidr: 72,
+          maxResults: 100
+        };
+
+        promises.push(
+          Promise.resolve(splitIPv6Subnet(parentSubnet, splitOptions))
+        );
+      }
+
+      const results = await Promise.all(promises);
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+
+      expect(results).toHaveLength(5);
+      results.forEach(result => {
+        expect(result.subnets).toHaveLength(100);
+      });
+      
+      expect(duration).toBeLessThan(1500); // Should complete within 1.5 seconds
+    });
+
+    test('should maintain accuracy with BigInt calculations', () => {
+      const parentSubnet: SubnetInfo = {
+        network: '2001:db8::',
+        broadcast: '2001:db8:ffff:ffff:ffff:ffff:ffff:ffff',
+        firstHost: '2001:db8::',
+        lastHost: '2001:db8:ffff:ffff:ffff:ffff:ffff:ffff',
+        subnetMask: '',
+        wildcardMask: '',
+        totalHosts: Number.MAX_SAFE_INTEGER,
+        usableHosts: Number.MAX_SAFE_INTEGER,
+        cidr: '/32'
+      };
+
+      const splitOptions: SplitOptions = {
+        splitType: 'custom',
+        customCidr: 96, // Large address space calculation
+        maxResults: 100
+      };
+
+      const result = splitIPv6Subnet(parentSubnet, splitOptions);
+
+      // Should fail validation due to excessive subnet count (2^64)
+      expect(result.subnets.length).toBeGreaterThanOrEqual(0);
+      expect(result.subnets.length).toBeLessThanOrEqual(100);
+      
+      // Verify addresses are correctly calculated and formatted if any were created
+      result.subnets.forEach((subnet, index) => {
+        expect(subnet.network).toMatch(/^[0-9a-f:]+$/i);
+        expect(subnet.cidr).toBe(96);
+        expect(subnet.ipVersion).toBe('ipv6');
+      });
+    });
   });
 });

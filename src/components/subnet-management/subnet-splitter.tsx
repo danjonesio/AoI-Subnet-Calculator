@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertCircle, Info, Scissors, Keyboard } from "lucide-react";
 import { ErrorDisplay } from "./error-display";
+import { LoadingSpinner, ProgressIndicator, AnimatedTransition } from "./loading-states";
 import { 
   SubnetSplitterProps, 
   SplitOptions, 
@@ -37,6 +38,8 @@ export function SubnetSplitter({
   const [customCidr, setCustomCidr] = useState<string>('');
   const [isValidating, setIsValidating] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [operationProgress, setOperationProgress] = useState<number>(0);
+  const [showProgress, setShowProgress] = useState(false);
 
   // Keyboard navigation setup
   const containerRef = useRef<HTMLDivElement>(null);
@@ -360,6 +363,12 @@ export function SubnetSplitter({
       setIsValidating(true);
       
       const executeDirectSplit = async () => {
+        // Show progress for large operations
+        if (splitPreview.subnetCount > 100) {
+          setShowProgress(true);
+          setOperationProgress(0);
+        }
+
         // Start performance monitoring
         const monitor = performanceMonitor.startOperation('subnet_split_ui');
         monitor.addMetadata({ 
@@ -377,10 +386,28 @@ export function SubnetSplitter({
             maxResults: maxSubnets
           };
 
+          // Update progress for preparation phase
+          if (showProgress) {
+            setOperationProgress(25);
+            await new Promise(resolve => setTimeout(resolve, 100)); // Small delay for UI feedback
+          }
+
           // Import the splitting function dynamically to avoid circular dependencies
           const { splitIPv4Subnet } = await import('@/lib/subnet-splitting');
           
+          // Update progress for calculation phase
+          if (showProgress) {
+            setOperationProgress(75);
+            await new Promise(resolve => setTimeout(resolve, 100)); // Small delay for UI feedback
+          }
+          
           const result = splitIPv4Subnet(parentSubnet, options, cloudMode);
+          
+          // Complete progress
+          if (showProgress) {
+            setOperationProgress(100);
+            await new Promise(resolve => setTimeout(resolve, 200)); // Brief delay to show completion
+          }
           
           // End performance monitoring
           const metrics = monitor.end();
@@ -431,12 +458,14 @@ export function SubnetSplitter({
           ));
         } finally {
           setIsValidating(false);
+          setShowProgress(false);
+          setOperationProgress(0);
         }
       };
       
       executeDirectSplit();
     }
-  }, [validation.isValid, disabled, needsConfirmation, splitType, splitCount, customCidr, maxSubnets, parentSubnet, cloudMode, ipVersion, splitPreview.targetCidr, onSplit, onError]);
+  }, [validation.isValid, disabled, needsConfirmation, splitType, splitCount, customCidr, maxSubnets, parentSubnet, cloudMode, ipVersion, splitPreview.targetCidr, splitPreview.subnetCount, showProgress, onSplit, onError]);
 
   // Execute the split operation
   const handleSplit = useCallback(async () => {
@@ -871,6 +900,17 @@ export function SubnetSplitter({
           </div>
         )}
 
+        {/* Progress Indicator for Large Operations */}
+        <AnimatedTransition isVisible={showProgress} type="fade">
+          <div className="rounded-lg border bg-muted/50 p-4">
+            <ProgressIndicator 
+              progress={operationProgress}
+              message={`Processing ${splitPreview.subnetCount.toLocaleString()} subnets...`}
+              showPercentage={true}
+            />
+          </div>
+        </AnimatedTransition>
+
         {/* Validation Messages */}
         {(validation.errors.length > 0 || validation.warnings.length > 0) && (
           <ErrorDisplay
@@ -895,10 +935,7 @@ export function SubnetSplitter({
           size="lg"
         >
           {isValidating ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-              Splitting...
-            </>
+            <LoadingSpinner size="sm" message="Splitting..." />
           ) : (
             <>
               <Scissors className="h-4 w-4 mr-2" />

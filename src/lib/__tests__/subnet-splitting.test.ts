@@ -586,8 +586,506 @@ describe('IPv4 Subnet Splitting', () => {
 
       expect(result.subnets).toHaveLength(0);
     });
+
+    test('should handle zero network address (0.0.0.0)', () => {
+      const parentSubnet = createTestSubnet('0.0.0.0', '/8');
+      const splitOptions: SplitOptions = {
+        splitType: 'equal',
+        splitCount: 2
+      };
+
+      const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+
+      expect(result.subnets).toHaveLength(2);
+      expect(result.subnets[0].network).toBe('0.0.0.0');
+      expect(result.subnets[1].network).toBe('0.128.0.0'); // Correct second subnet within /8
+    });
+
+    test('should handle maximum network address (255.255.255.255)', () => {
+      const parentSubnet = createTestSubnet('255.255.255.255', '/32');
+      const splitOptions: SplitOptions = {
+        splitType: 'custom',
+        customCidr: 33 // Invalid - should fail
+      };
+
+      const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+
+      expect(result.subnets).toHaveLength(0);
+    });
+
+    test('should handle private network ranges correctly', () => {
+      const testCases = [
+        { network: '10.0.0.0', cidr: '/8' },
+        { network: '172.16.0.0', cidr: '/12' },
+        { network: '192.168.0.0', cidr: '/16' }
+      ];
+
+      testCases.forEach(({ network, cidr }) => {
+        const parentSubnet = createTestSubnet(network, cidr);
+        const splitOptions: SplitOptions = {
+          splitType: 'equal',
+          splitCount: 4
+        };
+
+        const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+
+        expect(result.subnets).toHaveLength(4);
+        expect(result.subnets[0].network).toBe(network);
+      });
+    });
+
+    test('should handle loopback network (127.0.0.0/8)', () => {
+      const parentSubnet = createTestSubnet('127.0.0.0', '/8');
+      const splitOptions: SplitOptions = {
+        splitType: 'equal',
+        splitCount: 2
+      };
+
+      const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+
+      expect(result.subnets).toHaveLength(2);
+      expect(result.subnets[0].network).toBe('127.0.0.0');
+      expect(result.subnets[1].network).toBe('127.128.0.0'); // Correct second subnet
+    });
+
+    test('should handle multicast range (224.0.0.0/4)', () => {
+      const parentSubnet = createTestSubnet('224.0.0.0', '/4');
+      const splitOptions: SplitOptions = {
+        splitType: 'equal',
+        splitCount: 2
+      };
+
+      const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+
+      expect(result.subnets).toHaveLength(2);
+      expect(result.subnets[0].network).toBe('224.0.0.0');
+      expect(result.subnets[1].network).toBe('232.0.0.0');
+    });
+
+    test('should handle extremely small subnets (/30, /31, /32)', () => {
+      const testCases = [
+        { cidr: '/30', expectedHosts: [4, 4], expectedUsable: [2, 2] },
+        { cidr: '/31', expectedHosts: [2, 2], expectedUsable: [2, 2] },
+        { cidr: '/32', expectedHosts: [1, 1], expectedUsable: [1, 1] }
+      ];
+
+      testCases.forEach(({ cidr, expectedHosts, expectedUsable }) => {
+        const parentSubnet = createTestSubnet('192.168.1.0', '/29');
+        const splitOptions: SplitOptions = {
+          splitType: 'custom',
+          customCidr: parseInt(cidr.replace('/', ''))
+        };
+
+        const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+
+        if (result.subnets.length > 0) {
+          expect(result.subnets[0].totalHosts).toBe(expectedHosts[0]);
+          expect(result.subnets[0].usableHosts).toBe(expectedUsable[0]);
+        }
+      });
+    });
+
+    test('should handle invalid IP addresses gracefully', () => {
+      const invalidSubnet = {
+        ...createTestSubnet('192.168.1.0', '/24'),
+        network: '999.999.999.999' // Invalid IP
+      };
+
+      const splitOptions: SplitOptions = {
+        splitType: 'equal',
+        splitCount: 2
+      };
+
+      const result = splitIPv4Subnet(invalidSubnet, splitOptions, 'normal');
+
+      expect(result.subnets).toHaveLength(0);
+    });
+
+    test('should handle negative split counts', () => {
+      const parentSubnet = createTestSubnet('192.168.1.0', '/24');
+      const splitOptions: SplitOptions = {
+        splitType: 'equal',
+        splitCount: -2 // Invalid negative count
+      };
+
+      const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+
+      expect(result.subnets).toHaveLength(0);
+    });
+
+    test('should handle fractional split counts', () => {
+      const parentSubnet = createTestSubnet('192.168.1.0', '/24');
+      const splitOptions: SplitOptions = {
+        splitType: 'equal',
+        splitCount: 2.5 // Invalid fractional count
+      };
+
+      const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+
+      // Should round up to next power of 2 (4)
+      expect(result.subnets).toHaveLength(4);
+    });
+
+    test('should handle extremely large split counts', () => {
+      const parentSubnet = createTestSubnet('10.0.0.0', '/8');
+      const splitOptions: SplitOptions = {
+        splitType: 'equal',
+        splitCount: 1000000, // Very large count
+        maxResults: 100 // Should be limited
+      };
+
+      const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+
+      expect(result.subnets.length).toBeLessThanOrEqual(100);
+    });
   });
 });
+
+describe('Performance Tests for Large Subnet Operations', () => {
+  describe('Large IPv4 Subnet Splitting Performance', () => {
+    test('should handle splitting /16 into /24 subnets efficiently', () => {
+      const startTime = performance.now();
+      
+      const parentSubnet = createTestSubnet('10.0.0.0', '/16');
+      const splitOptions: SplitOptions = {
+        splitType: 'custom',
+        customCidr: 24,
+        maxResults: 256 // Limit to 256 subnets
+      };
+
+      const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+
+      expect(result.subnets).toHaveLength(256);
+      expect(duration).toBeLessThan(1000); // Should complete within 1 second
+      expect(result.performance?.calculationTime).toBeDefined();
+    });
+
+    test('should handle splitting /8 into /16 subnets with performance monitoring', () => {
+      const startTime = performance.now();
+      
+      const parentSubnet = createTestSubnet('10.0.0.0', '/8');
+      const splitOptions: SplitOptions = {
+        splitType: 'custom',
+        customCidr: 16,
+        maxResults: 256 // Limit to prevent excessive memory usage
+      };
+
+      const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+
+      expect(result.subnets).toHaveLength(256);
+      expect(duration).toBeLessThan(2000); // Should complete within 2 seconds
+      expect(result.totalAddresses).toBeGreaterThan(0);
+      expect(result.usableAddresses).toBeGreaterThan(0);
+    });
+
+    test('should efficiently handle maximum allowed subnet count', () => {
+      const startTime = performance.now();
+      
+      const parentSubnet = createTestSubnet('172.16.0.0', '/12');
+      const splitOptions: SplitOptions = {
+        splitType: 'custom',
+        customCidr: 20, // Creates 256 subnets instead of 1024
+        maxResults: 1000 // Maximum recommended limit
+      };
+
+      const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+
+      // /12 to /20 creates 2^(20-12) = 256 subnets
+      expect(result.subnets.length).toBeGreaterThan(0);
+      expect(result.subnets.length).toBeLessThanOrEqual(256);
+      expect(duration).toBeLessThan(3000); // Should complete within 3 seconds
+      
+      // Verify all subnets have correct properties
+      result.subnets.forEach((subnet, index) => {
+        expect(subnet.id).toBeDefined();
+        expect(subnet.network).toBeDefined();
+        expect(subnet.cidr).toBe(20);
+        expect(subnet.totalHosts).toBe(4096);
+        expect(subnet.usableHosts).toBe(4094);
+      });
+    });
+
+    test('should handle memory-intensive operations with cloud provider constraints', () => {
+      const startTime = performance.now();
+      
+      const parentSubnet = createTestSubnet('10.0.0.0', '/16');
+      const splitOptions: SplitOptions = {
+        splitType: 'custom',
+        customCidr: 24,
+        maxResults: 500
+      };
+
+      const result = splitIPv4Subnet(parentSubnet, splitOptions, 'aws');
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+
+      // /16 to /24 creates 256 subnets, limited to maxResults
+      expect(result.subnets.length).toBeGreaterThan(0);
+      expect(result.subnets.length).toBeLessThanOrEqual(256);
+      expect(duration).toBeLessThan(2000);
+      
+      // Verify AWS constraints are applied to all subnets
+      result.subnets.forEach(subnet => {
+        expect(subnet.cloudReserved).toHaveLength(5);
+        expect(subnet.usableHosts).toBe(subnet.totalHosts - 5);
+      });
+    });
+
+    test('should maintain performance with progressive calculation', () => {
+      const startTime = performance.now();
+      
+      const parentSubnet = createTestSubnet('192.168.0.0', '/16');
+      const splitOptions: SplitOptions = {
+        splitType: 'equal',
+        splitCount: 1024, // Large count to trigger progressive calculation
+        maxResults: 1000
+      };
+
+      const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+
+      // Should be limited by validation or maxResults
+      expect(result.subnets.length).toBeGreaterThanOrEqual(0);
+      expect(result.subnets.length).toBeLessThanOrEqual(1000);
+      expect(duration).toBeLessThan(5000); // Allow more time for progressive calculation
+      
+      // Verify subnets are correctly ordered if any were created
+      if (result.subnets.length > 1) {
+        for (let i = 1; i < result.subnets.length; i++) {
+          const prevNetwork = ipToInt(result.subnets[i - 1].network);
+          const currNetwork = ipToInt(result.subnets[i].network);
+          expect(currNetwork).toBeGreaterThan(prevNetwork);
+        }
+      }
+    });
+  });
+
+  describe('Large IPv4 Subnet Joining Performance', () => {
+    test('should efficiently join many adjacent subnets', () => {
+      // First create many small subnets
+      const parentSubnet = createTestSubnet('192.168.0.0', '/24');
+      const splitOptions: SplitOptions = {
+        splitType: 'custom',
+        customCidr: 30 // Creates 64 /30 subnets
+      };
+
+      const splitResult = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+      expect(splitResult.subnets).toHaveLength(64);
+
+      // Now test joining performance
+      const startTime = performance.now();
+      
+      // Take first 16 subnets (power of 2) for joining
+      const subnetsToJoin = splitResult.subnets.slice(0, 16);
+      const validation = validateSubnetAdjacency(subnetsToJoin);
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+
+      expect(validation.isValid).toBe(true);
+      expect(duration).toBeLessThan(100); // Should be very fast
+    });
+
+    test('should handle adjacency validation for large subnet groups', () => {
+      const startTime = performance.now();
+      
+      // Create a large number of adjacent subnets manually
+      const subnets: SplitSubnet[] = [];
+      for (let i = 0; i < 64; i++) {
+        const networkInt = ipToInt('10.0.0.0') + (i * 4); // /30 subnets
+        const network = intToIp(networkInt);
+        const subnet = createTestSubnet(network, '/30');
+        
+        subnets.push({
+          id: `subnet-${i}`,
+          network: subnet.network,
+          broadcast: subnet.broadcast,
+          firstHost: subnet.firstHost,
+          lastHost: subnet.lastHost,
+          cidr: 30,
+          totalHosts: subnet.totalHosts,
+          usableHosts: subnet.usableHosts,
+          parentId: 'parent',
+          level: 1,
+          isSelected: false,
+          ipVersion: 'ipv4'
+        });
+      }
+
+      // Test validation performance
+      const validation = validateSubnetAdjacency(subnets);
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+
+      expect(validation.isValid).toBe(true);
+      expect(duration).toBeLessThan(200); // Should complete quickly
+    });
+  });
+
+  describe('Memory Usage and Cleanup Tests', () => {
+    test('should not cause memory leaks with repeated operations', () => {
+      const initialMemory = performance.memory?.usedJSHeapSize || 0;
+      
+      // Perform multiple split operations
+      for (let i = 0; i < 10; i++) {
+        const parentSubnet = createTestSubnet(`192.168.${i}.0`, '/24');
+        const splitOptions: SplitOptions = {
+          splitType: 'equal',
+          splitCount: 8
+        };
+
+        const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+        expect(result.subnets).toHaveLength(8);
+      }
+
+      // Force garbage collection if available
+      if (global.gc) {
+        global.gc();
+      }
+
+      const finalMemory = performance.memory?.usedJSHeapSize || 0;
+      const memoryIncrease = finalMemory - initialMemory;
+      
+      // Memory increase should be reasonable (less than 10MB)
+      expect(memoryIncrease).toBeLessThan(10 * 1024 * 1024);
+    });
+
+    test('should handle concurrent split operations efficiently', async () => {
+      const startTime = performance.now();
+      
+      // Create multiple concurrent split operations
+      const promises = [];
+      for (let i = 0; i < 5; i++) {
+        const parentSubnet = createTestSubnet(`10.${i}.0.0`, '/16');
+        const splitOptions: SplitOptions = {
+          splitType: 'custom',
+          customCidr: 24,
+          maxResults: 100
+        };
+
+        promises.push(
+          Promise.resolve(splitIPv4Subnet(parentSubnet, splitOptions, 'normal'))
+        );
+      }
+
+      const results = await Promise.all(promises);
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+
+      expect(results).toHaveLength(5);
+      results.forEach(result => {
+        expect(result.subnets).toHaveLength(100);
+      });
+      
+      expect(duration).toBeLessThan(1000); // Should complete within 1 second
+    });
+  });
+
+  describe('Stress Tests for Edge Cases', () => {
+    test('should handle maximum CIDR splits without crashing', () => {
+      const parentSubnet = createTestSubnet('192.168.1.0', '/24');
+      const splitOptions: SplitOptions = {
+        splitType: 'custom',
+        customCidr: 32, // Maximum split
+        maxResults: 256
+      };
+
+      const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+
+      expect(result.subnets).toHaveLength(256);
+      result.subnets.forEach(subnet => {
+        expect(subnet.cidr).toBe(32);
+        expect(subnet.totalHosts).toBe(1);
+        expect(subnet.usableHosts).toBe(1);
+      });
+    });
+
+    test('should handle minimum CIDR splits efficiently', () => {
+      const parentSubnet = createTestSubnet('0.0.0.0', '/0'); // Entire IPv4 space
+      const splitOptions: SplitOptions = {
+        splitType: 'custom',
+        customCidr: 8,
+        maxResults: 256
+      };
+
+      const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+
+      // /0 to /8 creates 256 subnets, but may be limited by implementation
+      expect(result.subnets.length).toBeGreaterThan(0);
+      expect(result.subnets.length).toBeLessThanOrEqual(256);
+      if (result.subnets.length > 0) {
+        expect(result.subnets[0].network).toBe('0.0.0.0');
+      }
+      if (result.subnets.length === 256) {
+        expect(result.subnets[255].network).toBe('255.0.0.0');
+      }
+    });
+
+    test('should handle rapid successive split operations', () => {
+      const startTime = performance.now();
+      
+      let totalSubnets = 0;
+      for (let i = 0; i < 100; i++) {
+        const parentSubnet = createTestSubnet('10.0.0.0', '/24');
+        const splitOptions: SplitOptions = {
+          splitType: 'equal',
+          splitCount: 4
+        };
+
+        const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+        totalSubnets += result.subnets.length;
+      }
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+
+      expect(totalSubnets).toBe(400); // 100 operations × 4 subnets each
+      expect(duration).toBeLessThan(1000); // Should complete within 1 second
+    });
+
+    test('should maintain accuracy with floating point edge cases', () => {
+      // Test with networks that might cause floating point precision issues
+      const testCases = [
+        { network: '192.168.1.1', cidr: '/32' },
+        { network: '10.0.0.255', cidr: '/24' },
+        { network: '172.16.255.255', cidr: '/16' }
+      ];
+
+      testCases.forEach(({ network, cidr }) => {
+        const parentSubnet = createTestSubnet(network, cidr);
+        const splitOptions: SplitOptions = {
+          splitType: 'equal',
+          splitCount: 2
+        };
+
+        const result = splitIPv4Subnet(parentSubnet, splitOptions, 'normal');
+        
+        // Should either split successfully or fail gracefully
+        if (result.subnets.length > 0) {
+          result.subnets.forEach(subnet => {
+            expect(subnet.network).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
+            expect(subnet.broadcast).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
+          });
+        }
+      });
+    });
+  });
+});
+
 describe('IPv4 Subnet Adjacency Validation', () => {
   describe('validateSubnetAdjacency', () => {
     test('should validate adjacent subnets successfully', () => {

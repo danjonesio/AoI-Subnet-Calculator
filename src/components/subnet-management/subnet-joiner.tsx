@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertCircle, Link2, CheckSquare, Square, Keyboard } from "lucide-react";
 import { ErrorDisplay } from "./error-display";
+import { LoadingSpinner, AnimatedTransition } from "./loading-states";
 import { 
   SubnetJoinerProps, 
   ValidationResult,
@@ -729,10 +730,7 @@ export function SubnetJoiner({
               size="lg"
             >
               {isValidating ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                  Joining...
-                </>
+                <LoadingSpinner size="sm" message="Joining..." />
               ) : (
                 <>
                   <Link2 className="h-4 w-4 mr-2" />

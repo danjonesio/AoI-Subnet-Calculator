@@ -27,6 +27,15 @@ import { SubnetTree } from "@/components/subnet-management/subnet-tree";
 import { SubnetList } from "@/components/subnet-management/subnet-list";
 import { SubnetExport } from "@/components/subnet-management/subnet-export";
 import { SubnetErrorBoundary } from "@/components/subnet-management/subnet-error-boundary";
+import { 
+  LoadingSpinner, 
+  ProgressIndicator, 
+  AnimatedTransition, 
+  PulseHighlight,
+  SubnetSplitterSkeleton,
+  SubnetJoinerSkeleton,
+  SubnetListSkeleton
+} from "@/components/subnet-management/loading-states";
 
 interface CloudReservation {
   ip: string;
@@ -1192,31 +1201,39 @@ export default function SubnetCalculator() {
                     </Alert>
                   )}
 
-                  {/* Loading State */}
-                  {isSubnetLoading && (
-                    <Alert>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <AlertDescription>
-                        Processing subnet operation...
-                      </AlertDescription>
-                    </Alert>
-                  )}
+                  {/* Enhanced Loading State with Animation */}
+                  <AnimatedTransition isVisible={isSubnetLoading} type="fade">
+                    <PulseHighlight isActive={isSubnetLoading} color="primary">
+                      <Alert>
+                        <LoadingSpinner size="sm" message="Processing subnet operation..." />
+                        <AlertDescription className="ml-6">
+                          Please wait while we calculate your subnet configuration...
+                        </AlertDescription>
+                      </Alert>
+                    </PulseHighlight>
+                  </AnimatedTransition>
 
-                  {/* Subnet Splitting Section */}
+                  {/* Subnet Splitting Section with Loading Animation */}
                   <div className="space-y-4">
-                    <SubnetSplitter
-                      parentSubnet={{
-                        ...subnetInfo,
-                        id: subnetInfo.network + subnetInfo.cidr,
-                        level: 0
-                      }}
-                      ipVersion={ipVersion}
-                      cloudMode={mode as CloudMode}
-                      onSplit={addSplitSubnets}
-                      onError={(error: SubnetError) => setSubnetError(error.message)}
-                      disabled={isSubnetLoading}
-                      maxSubnets={1000}
-                    />
+                    <AnimatedTransition isVisible={!isSubnetLoading} type="slide">
+                      {isSubnetLoading ? (
+                        <SubnetSplitterSkeleton />
+                      ) : (
+                        <SubnetSplitter
+                          parentSubnet={{
+                            ...subnetInfo,
+                            id: subnetInfo.network + subnetInfo.cidr,
+                            level: 0
+                          }}
+                          ipVersion={ipVersion}
+                          cloudMode={mode as CloudMode}
+                          onSplit={addSplitSubnets}
+                          onError={(error: SubnetError) => setSubnetError(error.message)}
+                          disabled={isSubnetLoading}
+                          maxSubnets={1000}
+                        />
+                      )}
+                    </AnimatedTransition>
                   </div>
 
                 {/* Subnet Management Controls - Only show when subnets exist */}
@@ -1224,26 +1241,32 @@ export default function SubnetCalculator() {
                   <>
                     {/* Subnet Joining Section */}
                     <div className="space-y-4">
-                      <SubnetJoiner
-                        availableSubnets={splitSubnets}
-                        selectedSubnets={selectedSubnets}
-                        ipVersion={ipVersion}
-                        onSelectionChange={setSelectedSubnets}
-                        onJoin={(joinedSubnet, operation) => {
-                          // Remove the joined subnets from the list
-                          const subnetIdsToRemove = operation.sourceSubnets;
-                          removeSubnets(subnetIdsToRemove, operation);
-                          
-                          // Add the new joined subnet
-                          addSplitSubnets([joinedSubnet], {
-                            ...operation,
-                            type: 'join',
-                            resultSubnets: [joinedSubnet]
-                          });
-                        }}
-                        onError={(error: SubnetError) => setSubnetError(error.message)}
-                        disabled={isSubnetLoading}
-                      />
+                      <AnimatedTransition isVisible={!isSubnetLoading} type="slide">
+                        {isSubnetLoading ? (
+                          <SubnetJoinerSkeleton />
+                        ) : (
+                          <SubnetJoiner
+                            availableSubnets={splitSubnets}
+                            selectedSubnets={selectedSubnets}
+                            ipVersion={ipVersion}
+                            onSelectionChange={setSelectedSubnets}
+                            onJoin={(joinedSubnet, operation) => {
+                              // Remove the joined subnets from the list
+                              const subnetIdsToRemove = operation.sourceSubnets;
+                              removeSubnets(subnetIdsToRemove, operation);
+                              
+                              // Add the new joined subnet
+                              addSplitSubnets([joinedSubnet], {
+                                ...operation,
+                                type: 'join',
+                                resultSubnets: [joinedSubnet]
+                              });
+                            }}
+                            onError={(error: SubnetError) => setSubnetError(error.message)}
+                            disabled={isSubnetLoading}
+                          />
+                        )}
+                      </AnimatedTransition>
                     </div>
 
                     {/* View Toggle */}
@@ -1291,68 +1314,80 @@ export default function SubnetCalculator() {
                       </div>
                     </div>
 
-                    {/* Subnet Display - List or Tree View */}
-                    {currentView === 'list' ? (
-                      <SubnetList
-                        subnets={splitSubnets}
-                        selectedSubnets={selectedSubnets}
-                        onSelectionChange={setSelectedSubnets}
-                        onSort={updateSubnetSort}
-                        onFilter={updateSubnetFilter}
-                        onCopySubnet={async (subnet) => {
-                          try {
-                            const subnetInfo = `Network: ${subnet.network}/${subnet.cidr}
+                    {/* Subnet Display - List or Tree View with Smooth Transitions */}
+                    <AnimatedTransition isVisible={splitSubnets.length > 0} type="fade" duration="slow">
+                      <PulseHighlight isActive={splitSubnets.length > 0 && !isSubnetLoading} color="success">
+                        {currentView === 'list' ? (
+                          isSubnetLoading ? (
+                            <SubnetListSkeleton />
+                          ) : (
+                            <SubnetList
+                              subnets={splitSubnets}
+                              selectedSubnets={selectedSubnets}
+                              onSelectionChange={setSelectedSubnets}
+                              onSort={updateSubnetSort}
+                              onFilter={updateSubnetFilter}
+                              onCopySubnet={async (subnet) => {
+                                try {
+                                  const subnetInfo = `Network: ${subnet.network}/${subnet.cidr}
 Broadcast: ${subnet.broadcast}
 First Host: ${subnet.firstHost}
 Last Host: ${subnet.lastHost}
 Total Hosts: ${subnet.totalHosts.toLocaleString()}
 Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
-                            
-                            await navigator.clipboard.writeText(subnetInfo);
-                            // Success feedback could be added here
-                          } catch (error) {
-                            console.error('Failed to copy subnet information:', error);
-                            setSubnetError('Failed to copy subnet information to clipboard');
-                          }
-                        }}
-                        sortBy={sortBy}
-                        sortOrder={sortOrder}
-                        filterText={filterText}
-                        loading={isSubnetLoading}
-                        showSelection={true}
-                        showActions={true}
-                      />
-                    ) : (
-                      <SubnetTree
-                        subnets={splitSubnets}
-                        selectedSubnets={selectedSubnets}
-                        onSelectionChange={setSelectedSubnets}
-                        onCopySubnet={async (subnet) => {
-                          try {
-                            const subnetInfo = `Network: ${subnet.network}/${subnet.cidr}
+                                  
+                                  await navigator.clipboard.writeText(subnetInfo);
+                                  // Success feedback could be added here
+                                } catch (error) {
+                                  console.error('Failed to copy subnet information:', error);
+                                  setSubnetError('Failed to copy subnet information to clipboard');
+                                }
+                              }}
+                              sortBy={sortBy}
+                              sortOrder={sortOrder}
+                              filterText={filterText}
+                              loading={isSubnetLoading}
+                              showSelection={true}
+                              showActions={true}
+                            />
+                          )
+                        ) : (
+                          isSubnetLoading ? (
+                            <SubnetListSkeleton />
+                          ) : (
+                            <SubnetTree
+                              subnets={splitSubnets}
+                              selectedSubnets={selectedSubnets}
+                              onSelectionChange={setSelectedSubnets}
+                              onCopySubnet={async (subnet) => {
+                                try {
+                                  const subnetInfo = `Network: ${subnet.network}/${subnet.cidr}
 Broadcast: ${subnet.broadcast}
 First Host: ${subnet.firstHost}
 Last Host: ${subnet.lastHost}
 Total Hosts: ${subnet.totalHosts.toLocaleString()}
 Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
-                            
-                            await navigator.clipboard.writeText(subnetInfo);
-                            // Success feedback could be added here
-                          } catch (error) {
-                            console.error('Failed to copy subnet information:', error);
-                            setSubnetError('Failed to copy subnet information to clipboard');
-                          }
-                        }}
-                        expandedNodes={expandedNodes}
-                        onExpandChange={setExpandedNodes}
-                        showRelationships={true}
-                        filterText={filterText}
-                        onFilter={updateSubnetFilter}
-                        loading={isSubnetLoading}
-                        showSelection={true}
-                        showActions={true}
-                      />
-                    )}
+                                  
+                                  await navigator.clipboard.writeText(subnetInfo);
+                                  // Success feedback could be added here
+                                } catch (error) {
+                                  console.error('Failed to copy subnet information:', error);
+                                  setSubnetError('Failed to copy subnet information to clipboard');
+                                }
+                              }}
+                              expandedNodes={expandedNodes}
+                              onExpandChange={setExpandedNodes}
+                              showRelationships={true}
+                              filterText={filterText}
+                              onFilter={updateSubnetFilter}
+                              loading={isSubnetLoading}
+                              showSelection={true}
+                              showActions={true}
+                            />
+                          )
+                        )}
+                      </PulseHighlight>
+                    </AnimatedTransition>
 
                     {/* Export Section */}
                     <div className="pt-4 border-t">
