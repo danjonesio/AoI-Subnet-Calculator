@@ -549,8 +549,8 @@ export const SubnetList = memo<SubnetListProps>(({
 
   if (loading) {
     return (
-      <Card className={className}>
-        <CardContent className="flex items-center justify-center py-8">
+      <Card className={`${className} rounded-lg shadow-md`}>
+        <CardContent className="p-6 flex items-center justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin mr-2" />
           <span>Loading subnets...</span>
         </CardContent>
@@ -560,8 +560,8 @@ export const SubnetList = memo<SubnetListProps>(({
 
   if (subnets.length === 0) {
     return (
-      <Card className={className}>
-        <CardContent className="text-center py-8 text-muted-foreground">
+      <Card className={`${className} rounded-lg shadow-md`}>
+        <CardContent className="p-6 text-center py-8 text-muted-foreground">
           No subnets to display
         </CardContent>
       </Card>
@@ -583,9 +583,9 @@ export const SubnetList = memo<SubnetListProps>(({
         {selectedSubnets.size > 0 && `Selection updated: ${selectedSubnets.size} subnets selected`}
       </div>
 
-      <Card className={className}>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+      <Card className={`${className} rounded-lg shadow-md`}>
+        <CardHeader className="p-6 pb-4">
+          <CardTitle className="text-lg font-medium flex items-center justify-between">
             <span id="subnet-list-title">
               Subnet List ({subnets.length} subnet{subnets.length !== 1 ? 's' : ''})
             </span>
@@ -612,7 +612,7 @@ export const SubnetList = memo<SubnetListProps>(({
             </div>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
         {/* Search/Filter Input */}
         <div className="mb-4 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -675,7 +675,7 @@ export const SubnetList = memo<SubnetListProps>(({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-auto p-0 font-semibold hover:bg-transparent"
+                    className="h-auto p-0 hover:bg-transparent"
                     onClick={() => handleSort('network')}
                     aria-label={`Sort by network address. Currently sorted ${internalSortBy === 'network' ? `${internalSortOrder}ending` : 'unsorted'}`}
                     aria-describedby="network-sort-description"
@@ -691,7 +691,7 @@ export const SubnetList = memo<SubnetListProps>(({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-auto p-0 font-semibold hover:bg-transparent"
+                    className="h-auto p-0 hover:bg-transparent"
                     onClick={() => handleSort('cidr')}
                     aria-label={`Sort by CIDR prefix length. Currently sorted ${internalSortBy === 'cidr' ? `${internalSortOrder}ending` : 'unsorted'}`}
                     aria-describedby="cidr-sort-description"
@@ -707,7 +707,7 @@ export const SubnetList = memo<SubnetListProps>(({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-auto p-0 font-semibold hover:bg-transparent"
+                    className="h-auto p-0 hover:bg-transparent"
                     onClick={() => handleSort('usableHosts')}
                     aria-label={`Sort by usable hosts count. Currently sorted ${internalSortBy === 'usableHosts' ? `${internalSortOrder}ending` : 'unsorted'}`}
                     aria-describedby="hosts-sort-description"
@@ -723,7 +723,7 @@ export const SubnetList = memo<SubnetListProps>(({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-auto p-0 font-semibold hover:bg-transparent"
+                    className="h-auto p-0 hover:bg-transparent"
                     onClick={() => handleSort('firstHost')}
                     aria-label={`Sort by first host IP address. Currently sorted ${internalSortBy === 'firstHost' ? `${internalSortOrder}ending` : 'unsorted'}`}
                     aria-describedby="first-host-sort-description"
@@ -739,7 +739,7 @@ export const SubnetList = memo<SubnetListProps>(({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-auto p-0 font-semibold hover:bg-transparent"
+                    className="h-auto p-0 hover:bg-transparent"
                     onClick={() => handleSort('lastHost')}
                     aria-label={`Sort by last host IP address. Currently sorted ${internalSortBy === 'lastHost' ? `${internalSortOrder}ending` : 'unsorted'}`}
                     aria-describedby="last-host-sort-description"
@@ -787,27 +787,27 @@ export const SubnetList = memo<SubnetListProps>(({
                       </span>
                     </TableCell>
                   )}
-                  <TableCell className="font-mono text-sm" role="gridcell">
+                  <TableCell className="font-mono" role="gridcell">
                     <span aria-label={`Network address ${subnet.network}`}>
                       {subnet.network}
                     </span>
                   </TableCell>
-                  <TableCell className="font-mono text-sm" role="gridcell">
+                  <TableCell className="font-mono" role="gridcell">
                     <span aria-label={`CIDR prefix length ${subnet.cidr}`}>
                       /{subnet.cidr}
                     </span>
                   </TableCell>
-                  <TableCell className="text-sm" role="gridcell">
+                  <TableCell role="gridcell">
                     <span aria-label={`${subnet.usableHosts.toLocaleString()} usable host addresses`}>
                       {subnet.usableHosts.toLocaleString()}
                     </span>
                   </TableCell>
-                  <TableCell className="font-mono text-sm hidden lg:table-cell" role="gridcell">
+                  <TableCell className="font-mono hidden lg:table-cell" role="gridcell">
                     <span aria-label={`First host IP address ${subnet.firstHost}`}>
                       {subnet.firstHost}
                     </span>
                   </TableCell>
-                  <TableCell className="font-mono text-sm hidden lg:table-cell" role="gridcell">
+                  <TableCell className="font-mono hidden lg:table-cell" role="gridcell">
                     <span aria-label={`Last host IP address ${subnet.lastHost}`}>
                       {subnet.lastHost}
                     </span>
@@ -888,7 +888,7 @@ export const SubnetList = memo<SubnetListProps>(({
               key={subnet.id} 
               className={`${selectedSubnets.has(subnet.id) ? 'ring-2 ring-primary' : ''}`}
             >
-              <CardContent className="p-4">
+              <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-2">
                     {showSelection && (
@@ -965,7 +965,7 @@ export const SubnetList = memo<SubnetListProps>(({
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-background border rounded-lg p-6 max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
+                <h3 className="text-xl font-semibold flex items-center gap-2">
                   <Keyboard className="h-5 w-5" />
                   Keyboard Shortcuts
                 </h3>

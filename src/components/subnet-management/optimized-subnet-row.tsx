@@ -80,21 +80,21 @@ const OptimizedSubnetRow = memo<OptimizedSubnetRowProps>(({
           />
         </TableCell>
       )}
-      <TableCell className="font-mono text-sm">
+      <TableCell className="font-mono">
         {subnet.network}
       </TableCell>
-      <TableCell className="font-mono text-sm">
+      <TableCell className="font-mono">
         /{subnet.cidr}
       </TableCell>
-      <TableCell className="text-sm">
+      <TableCell>
         {subnet.usableHosts.toLocaleString()}
       </TableCell>
       {showExtendedColumns && (
         <>
-          <TableCell className="font-mono text-sm hidden lg:table-cell">
+          <TableCell className="font-mono hidden lg:table-cell">
             {subnet.firstHost}
           </TableCell>
-          <TableCell className="font-mono text-sm hidden lg:table-cell">
+          <TableCell className="font-mono hidden lg:table-cell">
             {subnet.lastHost}
           </TableCell>
         </>

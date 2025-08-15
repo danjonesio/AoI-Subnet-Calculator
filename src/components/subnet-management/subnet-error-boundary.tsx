@@ -305,17 +305,17 @@ export class SubnetErrorBoundary extends Component<Props, State> {
 
       return (
         <div className="w-full p-4">
-          <Card className="border-destructive bg-destructive/5">
-            <CardHeader>
+          <Card className="border-destructive bg-destructive/5 rounded-lg shadow-md">
+            <CardHeader className="p-6 pb-4">
               <div className="flex items-center gap-2">
                 <ErrorIcon className="h-5 w-5 text-destructive" />
-                <CardTitle className="text-destructive">{errorMessage.title}</CardTitle>
+                <CardTitle className="text-lg font-medium text-destructive">{errorMessage.title}</CardTitle>
               </div>
               <CardDescription>
                 {errorMessage.description}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="p-6 space-y-4">
               {/* Error suggestions */}
               <Alert>
                 <AlertTriangle className="h-4 w-4" />

@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     "subnet calculator",
     "network planning",
     "IPv4 calculator",
-    "IPv6 calculator", 
+    "IPv6 calculator",
     "AWS VPC subnetting",
     "Azure VNet calculator",
     "Google Cloud VPC",
@@ -95,7 +95,7 @@ export default function RootLayout({
     "featureList": [
       "IPv4 and IPv6 subnet calculation",
       "AWS VPC subnet planning",
-      "Azure VNet subnet planning", 
+      "Azure VNet subnet planning",
       "Google Cloud VPC subnet planning",
       "Subnet splitting and joining",
       "Cloud provider IP reservation handling",

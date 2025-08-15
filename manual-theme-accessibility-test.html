@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Theme Compatibility and Accessibility Manual Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #007acc;
+            padding-bottom: 10px;
+        }
+        .test-item {
+            margin: 15px 0;
+            padding: 10px;
+            background: #f9f9f9;
+            border-left: 4px solid #007acc;
+        }
+        .test-item h3 {
+            margin: 0 0 10px 0;
+            color: #555;
+        }
+        .test-instructions {
+            color: #666;
+            font-style: italic;
+        }
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        .checklist li {
+            margin: 8px 0;
+            padding: 5px 0;
+        }
+        .checklist input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.pass {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.fail {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .theme-toggle:hover {
+            background: #005a9e;
+        }
+        .dark-theme {
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .dark-theme .test-container {
+            background: #2d2d2d;
+            color: #e0e0e0;
+        }
+        .dark-theme .test-section {
+            border-color: #444;
+            background: #333;
+        }
+        .dark-theme .test-item {
+            background: #3a3a3a;
+        }
+        .dark-theme h2 {
+            color: #e0e0e0;
+        }
+        .dark-theme h3 {
+            color: #ccc;
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()">Toggle Dark Theme</button>
+    
+    <div class="test-container">
+        <h1>Theme Compatibility and Accessibility Manual Test</h1>
+        <p>This manual test helps verify that the UI Layout Redesign maintains theme compatibility and accessibility standards. Use this alongside the automated tests to ensure comprehensive coverage.</p>
+        
+        <div class="test-section">
+            <h2>Theme Consistency Tests</h2>
+            
+            <div class="test-item">
+                <h3>Spacing and Padding Consistency</h3>
+                <p class="test-instructions">Toggle between light and dark themes and verify that spacing remains identical.</p>
+                <ul class="checklist">
+                    <li><input type="checkbox"> Card padding remains consistent (p-6 for content, p-4 for headers)</li>
+                    <li><input type="checkbox"> Section spacing remains consistent (space-y-8 between major sections)</li>
+                    <li><input type="checkbox"> Form element spacing remains consistent (space-y-4 between form fields)</li>
+                    <li><input type="checkbox"> Button spacing and sizing remains consistent</li>
+                    <li><input type="checkbox"> Table cell padding remains consistent (px-4 py-2)</li>
+                </ul>
+            </div>
+            
+            <div class="test-item">
+                <h3>Visual Hierarchy Preservation</h3>
+                <p class="test-instructions">Verify that typography hierarchy is maintained across themes.</p>
+                <ul class="checklist">
+                    <li><input type="checkbox"> Page titles use text-2xl font-bold consistently</li>
+                    <li><input type="checkbox"> Section headers use text-xl font-semibold consistently</li>
+                    <li><input type="checkbox"> Card titles use text-lg font-medium consistently</li>
+                    <li><input type="checkbox"> Body text uses text-base consistently</li>
+                    <li><input type="checkbox"> Labels use text-sm font-medium consistently</li>
+                    <li><input type="checkbox"> Descriptions use text-sm text-muted-foreground consistently</li>
+                </ul>
+            </div>
+            
+            <div class="test-item">
+                <h3>Structural Styling Consistency</h3>
+                <p class="test-instructions">Check that card and component structure remains identical.</p>
+                <ul class="checklist">
+                    <li><input type="checkbox"> All cards use rounded-lg border radius</li>
+                    <li><input type="checkbox"> All cards use shadow-md consistently</li>
+                    <li><input type="checkbox"> Border radius values remain identical</li>
+                    <li><input type="checkbox"> Component proportions remain unchanged</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Accessibility Tests</h2>
+            
+            <div class="test-item">
+                <h3>Focus Indicators</h3>
+                <p class="test-instructions">Use Tab key to navigate through interactive elements and verify focus visibility.</p>
+                <ul class="checklist">
+                    <li><input type="checkbox"> All buttons show clear focus indicators</li>
+                    <li><input type="checkbox"> All input fields show clear focus indicators</li>
+                    <li><input type="checkbox"> All select elements show clear focus indicators</li>
+                    <li><input type="checkbox"> Focus indicators are visible in both light and dark themes</li>
+                    <li><input type="checkbox"> Focus indicators use consistent styling (ring-2 ring-primary)</li>
+                </ul>
+            </div>
+            
+            <div class="test-item">
+                <h3>Touch Target Sizes</h3>
+                <p class="test-instructions">Verify that interactive elements meet minimum 44px touch target requirements.</p>
+                <ul class="checklist">
+                    <li><input type="checkbox"> All buttons are at least 44px in height or have adequate padding</li>
+                    <li><input type="checkbox"> Theme toggle button meets touch target requirements</li>
+                    <li><input type="checkbox"> Form inputs have adequate height (h-10 = 40px + padding)</li>
+                    <li><input type="checkbox"> Select dropdowns have adequate touch targets</li>
+                    <li><input type="checkbox"> Interactive elements have adequate spacing between them (minimum 8px)</li>
+                </ul>
+            </div>
+            
+            <div class="test-item">
+                <h3>Contrast Ratios</h3>
+                <p class="test-instructions">Verify that text maintains adequate contrast in both themes.</p>
+                <ul class="checklist">
+                    <li><input type="checkbox"> Page titles have adequate contrast in light theme</li>
+                    <li><input type="checkbox"> Page titles have adequate contrast in dark theme</li>
+                    <li><input type="checkbox"> Body text has adequate contrast in light theme</li>
+                    <li><input type="checkbox"> Body text has adequate contrast in dark theme</li>
+                    <li><input type="checkbox"> Muted text (descriptions) remains readable in both themes</li>
+                    <li><input type="checkbox"> Button text has adequate contrast in both themes</li>
+                </ul>
+            </div>
+            
+            <div class="test-item">
+                <h3>Keyboard Navigation</h3>
+                <p class="test-instructions">Test keyboard navigation efficiency and logical flow.</p>
+                <ul class="checklist">
+                    <li><input type="checkbox"> Tab order follows logical reading order</li>
+                    <li><input type="checkbox"> All interactive elements are reachable via keyboard</li>
+                    <li><input type="checkbox"> Skip links or efficient navigation patterns are available</li>
+                    <li><input type="checkbox"> Focus doesn't get trapped in any component</li>
+                    <li><input type="checkbox"> Escape key works appropriately for modals/dropdowns</li>
+                </ul>
+            </div>
+            
+            <div class="test-item">
+                <h3>Screen Reader Compatibility</h3>
+                <p class="test-instructions">Test with screen reader or check semantic structure.</p>
+                <ul class="checklist">
+                    <li><input type="checkbox"> All form inputs have proper labels</li>
+                    <li><input type="checkbox"> Heading hierarchy is logical (h1 → h2 → h3)</li>
+                    <li><input type="checkbox"> Landmark regions are properly defined</li>
+                    <li><input type="checkbox"> ARIA labels are used where appropriate</li>
+                    <li><input type="checkbox"> Status messages are announced properly</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Responsive Design Tests</h2>
+            
+            <div class="test-item">
+                <h3>Mobile Accessibility</h3>
+                <p class="test-instructions">Test on mobile devices or use browser dev tools to simulate mobile.</p>
+                <ul class="checklist">
+                    <li><input type="checkbox"> Touch targets remain adequate on mobile (minimum 44px)</li>
+                    <li><input type="checkbox"> Spacing adjusts appropriately for smaller screens</li>
+                    <li><input type="checkbox"> Text remains readable at mobile sizes</li>
+                    <li><input type="checkbox"> Interactive elements don't overlap on mobile</li>
+                    <li><input type="checkbox"> Horizontal scrolling is not required</li>
+                </ul>
+            </div>
+            
+            <div class="test-item">
+                <h3>Page Width Constraint</h3>
+                <p class="test-instructions">Test the 80% width constraint across different screen sizes.</p>
+                <ul class="checklist">
+                    <li><input type="checkbox"> Content is limited to 80% width on large screens (>1440px)</li>
+                    <li><input type="checkbox"> Content is centered horizontally</li>
+                    <li><input type="checkbox"> Maximum width doesn't exceed 1152px (max-w-6xl)</li>
+                    <li><input type="checkbox"> Content remains readable on all screen sizes</li>
+                    <li><input type="checkbox"> Responsive padding adjusts appropriately (px-4 sm:px-6 lg:px-8)</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Performance and Maintainability</h2>
+            
+            <div class="test-item">
+                <h3>CSS Performance</h3>
+                <p class="test-instructions">Check that styling changes don't negatively impact performance.</p>
+                <ul class="checklist">
+                    <li><input type="checkbox"> Page loads quickly with new styling</li>
+                    <li><input type="checkbox"> Theme switching is smooth and fast</li>
+                    <li><input type="checkbox"> No layout shifts during theme changes</li>
+                    <li><input type="checkbox"> Consistent utility classes are used throughout</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Test Results Summary</h2>
+            <div id="test-summary">
+                <p>Complete the manual tests above and click "Calculate Results" to see your summary.</p>
+                <button onclick="calculateResults()" style="padding: 10px 20px; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer;">Calculate Results</button>
+                <div id="results" style="margin-top: 20px;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function toggleTheme() {
+            document.body.classList.toggle('dark-theme');
+        }
+        
+        function calculateResults() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const total = checkboxes.length;
+            const checked = document.querySelectorAll('input[type="checkbox"]:checked').length;
+            const percentage = Math.round((checked / total) * 100);
+            
+            let status = 'pending';
+            let statusText = 'In Progress';
+            
+            if (percentage >= 95) {
+                status = 'pass';
+                statusText = 'Excellent';
+            } else if (percentage >= 85) {
+                status = 'pass';
+                statusText = 'Good';
+            } else if (percentage >= 70) {
+                status = 'pending';
+                statusText = 'Needs Improvement';
+            } else {
+                status = 'fail';
+                statusText = 'Requires Attention';
+            }
+            
+            document.getElementById('results').innerHTML = `
+                <h3>Test Results</h3>
+                <p><strong>Completed:</strong> ${checked} / ${total} tests (${percentage}%)</p>
+                <p><strong>Status:</strong> <span class="status ${status}">${statusText}</span></p>
+                ${percentage < 100 ? '<p><em>Complete remaining tests for full verification.</em></p>' : '<p><em>All tests completed! Theme compatibility and accessibility verified.</em></p>'}
+            `;
+        }
+    </script>
+</body>
+</html>

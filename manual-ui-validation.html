@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Layout Validation - Manual Testing</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+        }
+        
+        .test-section h2 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #007acc;
+            padding-bottom: 10px;
+        }
+        
+        .test-item {
+            margin: 15px 0;
+            padding: 10px;
+            background: #f9f9f9;
+            border-left: 4px solid #007acc;
+        }
+        
+        .test-item.pass {
+            border-left-color: #28a745;
+            background: #f8fff9;
+        }
+        
+        .test-item.fail {
+            border-left-color: #dc3545;
+            background: #fff8f8;
+        }
+        
+        .test-controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        
+        .viewport-simulator {
+            border: 2px solid #007acc;
+            margin: 20px 0;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .viewport-content {
+            background: white;
+            min-height: 200px;
+            padding: 20px;
+        }
+        
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background: #005a9e;
+        }
+        
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .checklist li {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .checklist input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-pass { background: #28a745; }
+        .status-fail { background: #dc3545; }
+        .status-pending { background: #ffc107; }
+    </style>
+</head>
+<body>
+    <div class="test-controls">
+        <h3>Viewport Simulator</h3>
+        <button onclick="setViewport(1920, 1080)">1920px (Desktop)</button>
+        <button onclick="setViewport(1440, 900)">1440px (Laptop)</button>
+        <button onclick="setViewport(1024, 768)">1024px (Tablet)</button>
+        <button onclick="setViewport(768, 1024)">768px (Mobile)</button>
+        <button onclick="setViewport(375, 667)">375px (Small Mobile)</button>
+        <br>
+        <button onclick="toggleTheme()">Toggle Theme</button>
+        <button onclick="runAllTests()">Run All Tests</button>
+    </div>
+
+    <div class="test-container">
+        <h1>UI Layout Redesign - Manual Validation Checklist</h1>
+        <p><strong>Instructions:</strong> Open the Subnet Calculator application in a separate tab/window and use this checklist to validate all styling requirements. Use the viewport simulator buttons to test different screen sizes.</p>
+
+        <div class="test-section">
+            <h2>Requirement 1: Unified Card Styling (1.1-1.5)</h2>
+            <ul class="checklist">
+                <li>
+                    <input type="checkbox" id="card-padding">
+                    <label for="card-padding">All cards use identical padding values (p-6 for content, p-4 for headers)</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="card-spacing">
+                    <label for="card-spacing">Consistent spacing between sections throughout the page</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="card-styling">
+                    <label for="card-styling">All cards use same border radius (rounded-lg), shadow (shadow-md), and background</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="typography-consistency">
+                    <label for="typography-consistency">Text elements follow consistent typography scale and spacing</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="interactive-sizing">
+                    <label for="interactive-sizing">Interactive elements have uniform sizing, padding, and margins</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>Requirement 2: Page Width Constraint (2.1-2.5)</h2>
+            <ul class="checklist">
+                <li>
+                    <input type="checkbox" id="width-constraint">
+                    <label for="width-constraint">Main container limited to ~80% viewport width with max-width</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="large-monitor">
+                    <label for="large-monitor">Content doesn't stretch beyond comfortable reading width on large monitors (>1920px)</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="centered-content">
+                    <label for="centered-content">Container is centered horizontally on the page</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="responsive-constraint">
+                    <label for="responsive-constraint">80% constraint adapts appropriately for smaller screens</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="functionality-intact">
+                    <label for="functionality-intact">All existing functionality remains intact with width constraint</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>Requirement 3: Typography Hierarchy (3.1-3.5)</h2>
+            <ul class="checklist">
+                <li>
+                    <input type="checkbox" id="section-headers">
+                    <label for="section-headers">Section headers use consistent font sizes, weights, and spacing</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="card-titles">
+                    <label for="card-titles">Card titles follow unified typography scale (text-lg font-medium)</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="body-text">
+                    <label for="body-text">Body text uses consistent line heights and font sizes (text-base)</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="labels-descriptions">
+                    <label for="labels-descriptions">Labels and descriptions have standardized text colors and sizing</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="visual-hierarchy">
+                    <label for="visual-hierarchy">Visual hierarchy clearly distinguishes between different content levels</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>Requirement 4: Interactive Element Consistency (4.1-4.5)</h2>
+            <ul class="checklist">
+                <li>
+                    <input type="checkbox" id="button-consistency">
+                    <label for="button-consistency">Buttons use consistent heights (h-8, h-10, h-12), padding, and border radius</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="input-styling">
+                    <label for="input-styling">Input fields have uniform styling for borders, padding, and focus states</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="form-spacing">
+                    <label for="form-spacing">Form elements have consistent spacing between elements</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="interactive-states">
+                    <label for="interactive-states">Interactive states (hover, focus, active) follow unified styling system</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="button-variants">
+                    <label for="button-variants">Different button variants maintain consistent proportions and spacing</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>Requirement 5: Table Styling (5.1-5.5)</h2>
+            <ul class="checklist">
+                <li>
+                    <input type="checkbox" id="table-padding">
+                    <label for="table-padding">Tables use consistent cell padding (px-4 py-2) and row heights</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="column-spacing">
+                    <label for="column-spacing">Column spacing and alignment uniform across all tables</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="table-headers">
+                    <label for="table-headers">Table headers have consistent styling and typography</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="row-colors">
+                    <label for="row-colors">Alternating row colors follow same pattern across all tables</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="table-borders">
+                    <label for="table-borders">Table borders and dividers use consistent styling</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>Requirement 6: Theme Compatibility (6.1-6.5)</h2>
+            <ul class="checklist">
+                <li>
+                    <input type="checkbox" id="theme-spacing">
+                    <label for="theme-spacing">Spacing and padding remain identical when switching themes</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="theme-hierarchy">
+                    <label for="theme-hierarchy">Visual hierarchy preserved with appropriate color adjustments</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="theme-structure">
+                    <label for="theme-structure">Cards and sections maintain structural styling across themes</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="theme-interactive">
+                    <label for="theme-interactive">Interactive elements maintain sizing and spacing across themes</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="theme-professional">
+                    <label for="theme-professional">Both themes maintain same professional appearance</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>Requirement 7: Accessibility (7.1-7.5)</h2>
+            <ul class="checklist">
+                <li>
+                    <input type="checkbox" id="touch-targets">
+                    <label for="touch-targets">Touch targets remain at least 44px in size</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="contrast-ratios">
+                    <label for="contrast-ratios">Text maintains adequate contrast ratios in both themes</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="screen-reader">
+                    <label for="screen-reader">Screen readers can navigate structure logically</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="focus-indicators">
+                    <label for="focus-indicators">Focus indicators are clearly visible for all interactive elements</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="keyboard-navigation">
+                    <label for="keyboard-navigation">Keyboard navigation remains efficient and logical</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>Requirement 8: Maintainable System (8.1-8.5)</h2>
+            <ul class="checklist">
+                <li>
+                    <input type="checkbox" id="tailwind-consistency">
+                    <label for="tailwind-consistency">Styling uses Tailwind CSS utility classes consistently</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="systematic-spacing">
+                    <label for="systematic-spacing">Spacing values follow systematic scale (4, 6, 8, 12, 16, 24)</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="reusable-patterns">
+                    <label for="reusable-patterns">Components reuse common styling patterns</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="inheritance">
+                    <label for="inheritance">New sections automatically inherit unified styling system</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="minimal-inconsistencies">
+                    <label for="minimal-inconsistencies">Styling inconsistencies are minimal and easily identifiable</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>Cross-Section Integration Tests</h2>
+            <ul class="checklist">
+                <li>
+                    <input type="checkbox" id="all-sections">
+                    <label for="all-sections">Network Input, Subnet Information, Reserved Addresses, Advanced Subnet Management, and Export sections all use unified styling</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="screen-sizes">
+                    <label for="screen-sizes">80% width constraint works on 1920px+, 1440px, 1024px, 768px, and 375px screens</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="all-interactive">
+                    <label for="all-interactive">All interactive elements maintain consistent sizing and spacing</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+                <li>
+                    <input type="checkbox" id="professional-all">
+                    <label for="professional-all">Professional appearance maintained across both themes and all responsive breakpoints</label>
+                    <span class="status-indicator status-pending"></span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>Test Results Summary</h2>
+            <div id="test-summary">
+                <p><strong>Total Tests:</strong> <span id="total-tests">0</span></p>
+                <p><strong>Passed:</strong> <span id="passed-tests">0</span></p>
+                <p><strong>Failed:</strong> <span id="failed-tests">0</span></p>
+                <p><strong>Pending:</strong> <span id="pending-tests">0</span></p>
+                <p><strong>Completion:</strong> <span id="completion-percentage">0%</span></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTheme = 'light';
+        
+        function setViewport(width, height) {
+            const simulator = document.querySelector('.viewport-simulator');
+            if (!simulator) {
+                // Create viewport simulator if it doesn't exist
+                const container = document.querySelector('.test-container');
+                const newSimulator = document.createElement('div');
+                newSimulator.className = 'viewport-simulator';
+                newSimulator.innerHTML = `
+                    <div class="viewport-content">
+                        <p><strong>Viewport:</strong> ${width}x${height}px</p>
+                        <p>Open the Subnet Calculator in a new window and resize it to ${width}px width to test this viewport size.</p>
+                        <p>Check that the 80% width constraint and responsive spacing work correctly at this size.</p>
+                    </div>
+                `;
+                container.appendChild(newSimulator);
+            } else {
+                simulator.style.width = Math.min(width, 1200) + 'px';
+                simulator.querySelector('.viewport-content').innerHTML = `
+                    <p><strong>Viewport:</strong> ${width}x${height}px</p>
+                    <p>Open the Subnet Calculator in a new window and resize it to ${width}px width to test this viewport size.</p>
+                    <p>Check that the 80% width constraint and responsive spacing work correctly at this size.</p>
+                `;
+            }
+        }
+        
+        function toggleTheme() {
+            currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+            alert(`Switch the Subnet Calculator to ${currentTheme} theme and verify that spacing and styling remain consistent.`);
+        }
+        
+        function updateTestSummary() {
+            const checkboxes = document.querySelectorAll('.checklist input[type="checkbox"]');
+            const total = checkboxes.length;
+            const passed = document.querySelectorAll('.checklist input[type="checkbox"]:checked').length;
+            const failed = 0; // Manual testing doesn't track failures automatically
+            const pending = total - passed;
+            const completion = Math.round((passed / total) * 100);
+            
+            document.getElementById('total-tests').textContent = total;
+            document.getElementById('passed-tests').textContent = passed;
+            document.getElementById('failed-tests').textContent = failed;
+            document.getElementById('pending-tests').textContent = pending;
+            document.getElementById('completion-percentage').textContent = completion + '%';
+            
+            // Update status indicators
+            checkboxes.forEach((checkbox, index) => {
+                const indicator = checkbox.parentElement.querySelector('.status-indicator');
+                if (checkbox.checked) {
+                    indicator.className = 'status-indicator status-pass';
+                } else {
+                    indicator.className = 'status-indicator status-pending';
+                }
+            });
+        }
+        
+        function runAllTests() {
+            alert('Manual testing checklist loaded. Please go through each item systematically and check off completed validations. Use the viewport simulator buttons to test different screen sizes.');
+        }
+        
+        // Add event listeners to all checkboxes
+        document.addEventListener('DOMContentLoaded', function() {
+            const checkboxes = document.querySelectorAll('.checklist input[type="checkbox"]');
+            checkboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', updateTestSummary);
+            });
+            updateTestSummary();
+        });
+        
+        // Initialize
+        updateTestSummary();
+    </script>
+</body>
+</html>

@@ -79,7 +79,7 @@ ProgressIndicator.displayName = 'ProgressIndicator';
 export const SubnetCalculationSkeleton = memo(() => (
   <Card>
     <CardHeader>
-      <CardTitle className="flex items-center gap-2">
+      <CardTitle className="text-lg font-medium flex items-center gap-2">
         <Calculator className="h-5 w-5" />
         <Skeleton className="h-6 w-32" />
       </CardTitle>
@@ -119,7 +119,7 @@ SubnetCalculationSkeleton.displayName = 'SubnetCalculationSkeleton';
 export const SubnetSplitterSkeleton = memo(() => (
   <Card>
     <CardHeader>
-      <CardTitle className="flex items-center gap-2">
+      <CardTitle className="text-lg font-medium flex items-center gap-2">
         <Network className="h-5 w-5" />
         <Skeleton className="h-6 w-28" />
       </CardTitle>
@@ -148,7 +148,7 @@ SubnetSplitterSkeleton.displayName = 'SubnetSplitterSkeleton';
 export const SubnetJoinerSkeleton = memo(() => (
   <Card>
     <CardHeader>
-      <CardTitle className="flex items-center gap-2">
+      <CardTitle className="text-lg font-medium flex items-center gap-2">
         <Link2 className="h-5 w-5" />
         <Skeleton className="h-6 w-28" />
       </CardTitle>
@@ -180,7 +180,7 @@ SubnetJoinerSkeleton.displayName = 'SubnetJoinerSkeleton';
 export const SubnetListSkeleton = memo(() => (
   <Card>
     <CardHeader>
-      <CardTitle className="flex items-center justify-between">
+      <CardTitle className="text-lg font-medium flex items-center justify-between">
         <Skeleton className="h-6 w-32" />
         <Skeleton className="h-4 w-20" />
       </CardTitle>
@@ -219,7 +219,7 @@ SubnetListSkeleton.displayName = 'SubnetListSkeleton';
 export const SubnetExportSkeleton = memo(() => (
   <Card>
     <CardHeader>
-      <CardTitle className="flex items-center gap-2">
+      <CardTitle className="text-lg font-medium flex items-center gap-2">
         <Download className="h-5 w-5" />
         <Skeleton className="h-6 w-28" />
       </CardTitle>
@@ -270,8 +270,8 @@ export const LoadingOverlay = memo<LoadingOverlayProps>(({
 
   return (
     <div className={`fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center ${className}`}>
-      <Card className="w-full max-w-md mx-4">
-        <CardContent className="pt-6">
+      <Card className="w-full max-w-md mx-4 rounded-lg shadow-md">
+        <CardContent className="p-6 pt-6">
           <div className="space-y-4">
             <LoadingSpinner size="lg" message={message} />
             {typeof progress === 'number' && (

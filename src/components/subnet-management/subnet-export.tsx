@@ -446,8 +446,8 @@ export function SubnetExport({
 
   if (subnets.length === 0) {
     return (
-      <Card className={className}>
-        <CardContent className="text-center py-8 text-muted-foreground">
+      <Card className={`${className} rounded-lg shadow-md`}>
+        <CardContent className="p-6 text-center py-8 text-muted-foreground">
           No subnets available for export
         </CardContent>
       </Card>
@@ -455,7 +455,7 @@ export function SubnetExport({
   }
 
   return (
-    <Card className={className}>
+    <Card className={`${className} rounded-lg shadow-md`}>
       {/* Live region for export feedback */}
       <div 
         aria-live="polite" 
@@ -467,8 +467,8 @@ export function SubnetExport({
         {isExporting && 'Export operation in progress...'}
       </div>
 
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+      <CardHeader className="p-6 pb-4">
+        <CardTitle className="text-lg font-medium flex items-center gap-2">
           <Download className="h-5 w-5" aria-hidden="true" />
           <span id="subnet-export-title">Export Subnets</span>
         </CardTitle>
@@ -479,7 +479,7 @@ export function SubnetExport({
           {selectedSubnets.size > 0 && ` ${selectedSubnets.size} subnet${selectedSubnets.size !== 1 ? 's' : ''} currently selected.`}
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="p-6 space-y-4">
         {/* Export feedback */}
         {exportFeedback && (
           <Alert className={exportFeedback.type === 'success' 
@@ -499,66 +499,63 @@ export function SubnetExport({
           </Alert>
         )}
 
-        {/* Export options */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Format selection */}
-          <div className="space-y-2">
-            <label htmlFor="export-format" className="text-sm font-medium" id="export-format-label">
-              Export Format
-            </label>
-            <Select 
-              value={exportFormat} 
-              onValueChange={(value) => setExportFormat(value as ExportOptions['format'])}
-              aria-labelledby="export-format-label"
-              aria-describedby="export-format-description"
-            >
-              <SelectTrigger id="export-format">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {availableFormats.map(format => (
-                  <SelectItem 
-                    key={format} 
-                    value={format}
-                    aria-describedby={`format-${format}-description`}
-                  >
-                    <div className="flex items-center gap-2">
-                      {getFormatIcon(format)}
-                      <span className="capitalize">{format}</span>
-                      {format === 'text' && <span className="text-xs text-muted-foreground">(Human readable)</span>}
-                      {format === 'csv' && <span className="text-xs text-muted-foreground">(Spreadsheet)</span>}
-                      {format === 'json' && <span className="text-xs text-muted-foreground">(Structured data)</span>}
-                    </div>
-                    <span id={`format-${format}-description`} className="sr-only">
-                      {format === 'text' && 'Plain text format suitable for human reading and documentation'}
-                      {format === 'csv' && 'Comma-separated values format suitable for spreadsheet applications'}
-                      {format === 'json' && 'JavaScript Object Notation format suitable for programmatic processing'}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div id="export-format-description" className="sr-only">
-              Choose the file format for exporting subnet data. Different formats are suitable for different use cases.
-            </div>
+        {/* Export Format */}
+        <div className="space-y-2">
+          <label htmlFor="export-format" className="text-sm font-medium" id="export-format-label">
+            Export Format
+          </label>
+          <Select 
+            value={exportFormat} 
+            onValueChange={(value) => setExportFormat(value as ExportOptions['format'])}
+            aria-labelledby="export-format-label"
+            aria-describedby="export-format-description"
+          >
+            <SelectTrigger id="export-format">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {availableFormats.map(format => (
+                <SelectItem 
+                  key={format} 
+                  value={format}
+                  aria-describedby={`format-${format}-description`}
+                >
+                  <div className="flex items-center gap-2">
+                    {getFormatIcon(format)}
+                    <span className="capitalize">{format}</span>
+                    {format === 'text' && <span className="text-xs text-muted-foreground">(Human readable)</span>}
+                    {format === 'csv' && <span className="text-xs text-muted-foreground">(Spreadsheet)</span>}
+                    {format === 'json' && <span className="text-xs text-muted-foreground">(Structured data)</span>}
+                  </div>
+                  <span id={`format-${format}-description`} className="sr-only">
+                    {format === 'text' && 'Plain text format suitable for human reading and documentation'}
+                    {format === 'csv' && 'Comma-separated values format suitable for spreadsheet applications'}
+                    {format === 'json' && 'JavaScript Object Notation format suitable for programmatic processing'}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div id="export-format-description" className="sr-only">
+            Choose the file format for exporting subnet data. Different formats are suitable for different use cases.
           </div>
+        </div>
 
-          {/* Export scope */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium" id="export-scope-label">Export Scope</label>
-            <div 
-              className="text-sm text-muted-foreground"
-              aria-labelledby="export-scope-label"
-              aria-describedby="export-scope-description"
-            >
-              {selectedOnly && selectedSubnets.size > 0 
-                ? `${selectedSubnets.size} selected subnet${selectedSubnets.size === 1 ? '' : 's'}`
-                : `All ${subnets.length} subnet${subnets.length === 1 ? '' : 's'}`
-              }
-            </div>
-            <div id="export-scope-description" className="sr-only">
-              Shows the number of subnets that will be included in the export based on current selection settings.
-            </div>
+        {/* Export Scope */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium" id="export-scope-label">Export Scope</label>
+          <div 
+            className="text-sm text-muted-foreground p-2 bg-muted rounded-md"
+            aria-labelledby="export-scope-label"
+            aria-describedby="export-scope-description"
+          >
+            {selectedOnly && selectedSubnets.size > 0 
+              ? `Export selected subnets only (${selectedSubnets.size} subnet${selectedSubnets.size === 1 ? '' : 's'})`
+              : `Export all subnets (${subnets.length} subnet${subnets.length === 1 ? '' : 's'})`
+            }
+          </div>
+          <div id="export-scope-description" className="sr-only">
+            Shows the number of subnets that will be included in the export based on current selection settings.
           </div>
         </div>
 
@@ -620,12 +617,14 @@ export function SubnetExport({
         </fieldset>
 
         {/* Export actions */}
-        <div className="flex flex-col sm:flex-row gap-2 pt-4" role="group" aria-labelledby="export-actions-label">
+        <div className="space-y-2 pt-4" role="group" aria-labelledby="export-actions-label">
           <div id="export-actions-label" className="sr-only">Export Actions</div>
+          
+          {/* Copy All to Clipboard Button - Full Width */}
           <Button
             onClick={handleCopyAll}
             disabled={isExporting || subnetsToExport.length === 0}
-            className="flex-1"
+            className="w-full"
             aria-describedby="copy-button-description"
           >
             {isExporting ? (
@@ -642,11 +641,12 @@ export function SubnetExport({
             {includeMetadata ? 'Metadata will be included.' : 'Metadata will not be included.'}
           </div>
 
+          {/* Download File Button - Full Width */}
           <Button
             onClick={handleDownload}
             disabled={isExporting || subnetsToExport.length === 0}
             variant="outline"
-            className="flex-1"
+            className="w-full"
             aria-describedby="download-button-description"
           >
             {isExporting ? (

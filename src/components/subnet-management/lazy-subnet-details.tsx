@@ -225,9 +225,9 @@ Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
   }, [subnet]);
 
   return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
+    <Card className={`${className} rounded-lg shadow-md`}>
+      <CardHeader className="p-6 pb-4">
+        <CardTitle className="text-lg font-medium flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Network className="h-5 w-5" />
             <span>Subnet Details</span>
@@ -257,7 +257,7 @@ Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
           </div>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="p-6 space-y-4">
         {/* Basic Information Section */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">

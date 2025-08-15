@@ -693,9 +693,9 @@ export function SubnetSplitter({
         {splitPreview.isValid && splitPreview.subnetCount > 100 && 'Large split operation may impact performance'}
       </div>
 
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+      <Card className="w-full rounded-lg shadow-md">
+        <CardHeader className="p-6 pb-4">
+          <CardTitle className="text-lg font-medium flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Scissors className="h-5 w-5" aria-hidden="true" />
               <span id="subnet-splitter-title">Split Subnet</span>
@@ -718,7 +718,7 @@ export function SubnetSplitter({
             {ipVersion === 'ipv6' ? ' IPv6 subnetting with 128-bit address space.' : ' IPv4 subnetting with 32-bit address space.'}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="p-6 space-y-4">
         {/* Split Type Selector */}
         <div className="space-y-2">
           <Label htmlFor="split-type" id="split-type-label">
@@ -950,7 +950,7 @@ export function SubnetSplitter({
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-background border rounded-lg p-6 max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
+                <h3 className="text-xl font-semibold flex items-center gap-2">
                   <Keyboard className="h-5 w-5" />
                   Keyboard Shortcuts
                 </h3>
@@ -1009,7 +1009,7 @@ export function SubnetSplitter({
             <div ref={confirmationModalRef} className="bg-background border rounded-lg p-6 max-w-md mx-4">
               <div className="flex items-center gap-2 mb-4">
                 <AlertCircle className="h-5 w-5 text-orange-500" />
-                <h3 className="text-lg font-semibold">Confirm Large Split Operation</h3>
+                <h3 className="text-xl font-semibold">Confirm Large Split Operation</h3>
               </div>
               
               <div className="space-y-3 mb-6">

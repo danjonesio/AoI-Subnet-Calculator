@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +20,7 @@ import {
   SubnetOperation,
   SubnetError
 } from "@/lib/types";
-import { debounce, throttle, performanceMonitor, shouldShowPerformanceWarning } from "@/lib/performance";
+import { debounce, throttle, performanceMonitor } from "@/lib/performance";
 import { SubnetSplitter } from "@/components/subnet-management/subnet-splitter";
 import { SubnetJoiner } from "@/components/subnet-management/subnet-joiner";
 import { SubnetTree } from "@/components/subnet-management/subnet-tree";
@@ -29,9 +29,6 @@ import { SubnetExport } from "@/components/subnet-management/subnet-export";
 import { SubnetErrorBoundary } from "@/components/subnet-management/subnet-error-boundary";
 import {
   LoadingSpinner,
-  ProgressIndicator,
-  AnimatedTransition,
-  PulseHighlight,
   SubnetSplitterSkeleton,
   SubnetJoinerSkeleton,
   SubnetListSkeleton
@@ -132,12 +129,11 @@ export default function SubnetCalculator() {
   // Subnet Management State - Enhanced for advanced subnet management
   const [splitSubnets, setSplitSubnets] = useState<SplitSubnet[]>([]);
   const [selectedSubnets, setSelectedSubnets] = useState<Set<string>>(new Set());
-  const [splitHistory, setSplitHistory] = useState<SubnetOperation[]>([]);
+  // const [splitHistory, setSplitHistory] = useState<SubnetOperation[]>([]);
   const [isSubnetLoading, setIsSubnetLoading] = useState(false);
   const [subnetError, setSubnetError] = useState<string | null>(null);
 
   // Additional state for enhanced subnet management
-  const [originalSubnet, setOriginalSubnet] = useState<SubnetInfo | null>(null);
   const [currentView, setCurrentView] = useState<'list' | 'tree'>('list');
   const [sortBy, setSortBy] = useState<'network' | 'cidr' | 'hosts' | 'created'>('network');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -146,7 +142,6 @@ export default function SubnetCalculator() {
 
   // Performance optimization: debounced validation and calculation
   const [isValidating, setIsValidating] = useState(false);
-  const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -183,71 +178,77 @@ export default function SubnetCalculator() {
 
   // Debounced validation functions for real-time input validation
   const debouncedValidateIP = useCallback(
-    debounce((ip: string) => {
-      setIsValidating(true);
-      const monitor = performanceMonitor.startOperation('ip_validation');
+    (ip: string) => {
+      const debouncedFn = debounce(() => {
+        setIsValidating(true);
+        const monitor = performanceMonitor.startOperation('ip_validation');
 
-      try {
-        const isValid = validateIP(ip);
-        if (!isValid && ip.length > 0) {
-          if (ipVersion === "ipv4") {
-            const parts = ip.split(".");
-            if (parts.length !== 4) {
-              setError("IP address must have exactly 4 octets separated by dots");
-            } else if (parts.some(part => part === "" || isNaN(parseInt(part)))) {
-              setError("All IP address octets must be valid numbers");
-            } else if (parts.some(part => parseInt(part) < 0 || parseInt(part) > 255)) {
-              setError("IP address octets must be between 0 and 255");
+        try {
+          const isValid = validateIP(ip);
+          if (!isValid && ip.length > 0) {
+            if (ipVersion === "ipv4") {
+              const parts = ip.split(".");
+              if (parts.length !== 4) {
+                setError("IP address must have exactly 4 octets separated by dots");
+              } else if (parts.some(part => part === "" || isNaN(parseInt(part)))) {
+                setError("All IP address octets must be valid numbers");
+              } else if (parts.some(part => parseInt(part) < 0 || parseInt(part) > 255)) {
+                setError("IP address octets must be between 0 and 255");
+              } else {
+                setError("Invalid IP address format");
+              }
             } else {
-              setError("Invalid IP address format");
+              setError("Invalid IPv6 address format");
             }
-          } else {
-            setError("Invalid IPv6 address format");
+          } else if (isValid) {
+            setError("");
           }
-        } else if (isValid) {
-          setError("");
+        } catch (error) {
+          console.error('IP validation error:', error);
+          setError("Error validating IP address");
+        } finally {
+          monitor.end();
+          setIsValidating(false);
         }
-      } catch (error) {
-        console.error('IP validation error:', error);
-        setError("Error validating IP address");
-      } finally {
-        monitor.end();
-        setIsValidating(false);
-      }
-    }, 300),
+      }, 300);
+      debouncedFn();
+    },
     [validateIP, ipVersion]
   );
 
   const debouncedValidateCIDR = useCallback(
-    debounce((cidrValue: string) => {
-      setIsValidating(true);
-      const monitor = performanceMonitor.startOperation('cidr_validation');
+    (cidrValue: string) => {
+      const debouncedFn = debounce(() => {
+        setIsValidating(true);
+        const monitor = performanceMonitor.startOperation('cidr_validation');
 
-      try {
-        const isValid = validateCIDR(cidrValue);
-        if (!isValid && cidrValue.length > 0) {
-          if (ipVersion === "ipv6") {
-            setError("IPv6 CIDR must be between 0 and 128");
-          } else if (mode === "normal") {
-            setError("CIDR must be between 0 and 32");
-          } else {
-            const provider = CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS];
-            if (provider) {
-              const minHosts = Math.pow(2, 32 - provider.maxCidr);
-              setError(`${provider.name} subnets require CIDR between /${provider.minCidr} and /${provider.maxCidr} (minimum ${minHosts} IP addresses)`);
+        try {
+          const isValid = validateCIDR(cidrValue);
+          if (!isValid && cidrValue.length > 0) {
+            if (ipVersion === "ipv6") {
+              setError("IPv6 CIDR must be between 0 and 128");
+            } else if (mode === "normal") {
+              setError("CIDR must be between 0 and 32");
+            } else {
+              const provider = CLOUD_PROVIDERS[mode as keyof typeof CLOUD_PROVIDERS];
+              if (provider) {
+                const minHosts = Math.pow(2, 32 - provider.maxCidr);
+                setError(`${provider.name} subnets require CIDR between /${provider.minCidr} and /${provider.maxCidr} (minimum ${minHosts} IP addresses)`);
+              }
             }
+          } else if (isValid) {
+            setError("");
           }
-        } else if (isValid) {
-          setError("");
+        } catch (error) {
+          console.error('CIDR validation error:', error);
+          setError("Error validating CIDR");
+        } finally {
+          monitor.end();
+          setIsValidating(false);
         }
-      } catch (error) {
-        console.error('CIDR validation error:', error);
-        setError("Error validating CIDR");
-      } finally {
-        monitor.end();
-        setIsValidating(false);
-      }
-    }, 300),
+      }, 300);
+      debouncedFn();
+    },
     [validateCIDR, ipVersion, mode]
   );
 
@@ -307,30 +308,15 @@ export default function SubnetCalculator() {
     }
   }, []);
 
-  const toggleSubnetSelection = useCallback((subnetId: string) => {
-    try {
-      setSelectedSubnets(prev => {
-        const newSelected = new Set(prev);
-        if (newSelected.has(subnetId)) {
-          newSelected.delete(subnetId);
-        } else {
-          newSelected.add(subnetId);
-        }
-        return newSelected;
-      });
-    } catch (error) {
-      setSubnetError(error instanceof Error ? error.message : 'Failed to toggle subnet selection');
-    }
-  }, []);
+
 
   const resetSubnetManagement = useCallback(() => {
     try {
       setSplitSubnets([]);
       setSelectedSubnets(new Set());
-      setSplitHistory([]);
+      // setSplitHistory([]);
       setIsSubnetLoading(false);
       setSubnetError(null);
-      setOriginalSubnet(null);
       setCurrentView('list');
       setSortBy('network');
       setSortOrder('asc');
@@ -342,24 +328,7 @@ export default function SubnetCalculator() {
     }
   }, []);
 
-  // Additional state management functions for enhanced functionality
-  const updateSubnetSelection = useCallback((subnetIds: string[], selected: boolean) => {
-    try {
-      setSelectedSubnets(prev => {
-        const newSelected = new Set(prev);
-        subnetIds.forEach(id => {
-          if (selected) {
-            newSelected.add(id);
-          } else {
-            newSelected.delete(id);
-          }
-        });
-        return newSelected;
-      });
-    } catch (error) {
-      setSubnetError(error instanceof Error ? error.message : 'Failed to update subnet selection');
-    }
-  }, []);
+
 
   const selectAllSubnets = useCallback(() => {
     try {
@@ -378,13 +347,7 @@ export default function SubnetCalculator() {
     }
   }, []);
 
-  const updateSubnetView = useCallback((view: 'list' | 'tree') => {
-    try {
-      setCurrentView(view);
-    } catch (error) {
-      setSubnetError(error instanceof Error ? error.message : 'Failed to update view');
-    }
-  }, []);
+
 
   const updateSubnetSort = useCallback((field: string, order: 'asc' | 'desc') => {
     try {
@@ -403,54 +366,9 @@ export default function SubnetCalculator() {
     }
   }, []);
 
-  const toggleNodeExpansion = useCallback((nodeId: string) => {
-    try {
-      setExpandedNodes(prev => {
-        const newExpanded = new Set(prev);
-        if (newExpanded.has(nodeId)) {
-          newExpanded.delete(nodeId);
-        } else {
-          newExpanded.add(nodeId);
-        }
-        return newExpanded;
-      });
-    } catch (error) {
-      setSubnetError(error instanceof Error ? error.message : 'Failed to toggle node expansion');
-    }
-  }, []);
 
-  const undoLastOperation = useCallback(() => {
-    try {
-      if (splitHistory.length === 0) {
-        setSubnetError('No operations to undo');
-        return;
-      }
 
-      const lastOperation = splitHistory[splitHistory.length - 1];
 
-      // Remove the last operation from history
-      setSplitHistory(prev => prev.slice(0, -1));
-
-      // Reverse the operation based on its type
-      if (lastOperation.type === 'split') {
-        // Remove the subnets that were added by the split
-        const subnetIdsToRemove = lastOperation.resultSubnets.map(subnet => subnet.id);
-        setSplitSubnets(prev => prev.filter(subnet => !subnetIdsToRemove.includes(subnet.id)));
-        setSelectedSubnets(prev => {
-          const newSelected = new Set(prev);
-          subnetIdsToRemove.forEach(id => newSelected.delete(id));
-          return newSelected;
-        });
-      } else if (lastOperation.type === 'join') {
-        // Add back the subnets that were removed by the join
-        setSplitSubnets(prev => [...prev, ...lastOperation.resultSubnets]);
-      }
-
-      setSubnetError(null);
-    } catch (error) {
-      setSubnetError(error instanceof Error ? error.message : 'Failed to undo operation');
-    }
-  }, [splitHistory]);
 
   const calculateSubnet = useCallback(() => {
     try {
@@ -532,7 +450,6 @@ export default function SubnetCalculator() {
         };
 
         setSubnetInfo(calculatedIPv6Subnet);
-        setOriginalSubnet(calculatedIPv6Subnet); // Store original subnet for reset functionality
         return;
       }
 
@@ -752,7 +669,6 @@ export default function SubnetCalculator() {
         };
 
         setSubnetInfo(calculatedSubnet);
-        setOriginalSubnet(calculatedSubnet); // Store original subnet for reset functionality
 
       } catch (finalError) {
         console.error("Final validation error:", finalError);
@@ -771,18 +687,21 @@ export default function SubnetCalculator() {
 
   // Throttled calculation function to prevent excessive calculations
   const throttledCalculateSubnet = useCallback(
-    throttle(() => {
-      if (ipAddress && cidr && !isValidating) {
-        const monitor = performanceMonitor.startOperation('subnet_calculation');
-        monitor.addMetadata({ ipVersion, cloudMode: mode });
+    () => {
+      const throttledFn = throttle(() => {
+        if (ipAddress && cidr && !isValidating) {
+          const monitor = performanceMonitor.startOperation('subnet_calculation');
+          monitor.addMetadata({ ipVersion, cloudMode: mode });
 
-        try {
-          calculateSubnet();
-        } finally {
-          monitor.end();
+          try {
+            calculateSubnet();
+          } finally {
+            monitor.end();
+          }
         }
-      }
-    }, 500),
+      }, 500);
+      throttledFn();
+    },
     [calculateSubnet, ipAddress, cidr, isValidating, ipVersion, mode]
   );
 
@@ -851,7 +770,7 @@ export default function SubnetCalculator() {
         setIsSubnetLoading(false);
       }
     }
-  }, [mode, subnetInfo, ipVersion]);
+  }, [mode, subnetInfo, ipVersion, splitSubnets.length]);
 
   // Update subnet management visibility based on calculation state (Task 9.2)
   const shouldShowSubnetManagement = useMemo(() => {
@@ -859,7 +778,7 @@ export default function SubnetCalculator() {
   }, [subnetInfo, ipVersion, error]);
 
   return (
-    <div className="min-h-screen p-6 space-y-6">
+    <div className="min-h-screen max-w-[80vw] max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4 sm:space-y-6 lg:space-y-8">
       {/* Top navigation bar with logo and buttons */}
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center">
@@ -909,13 +828,13 @@ export default function SubnetCalculator() {
       {/* Main header section */}
       <div className="text-center space-y-4 mb-8">
         <div className="space-y-2">
-          <h1 className="text-4xl font-bold tracking-tight">Professional Subnet Calculator</h1>
-          <h2 className="text-xl text-muted-foreground font-medium">
+          <h1 className="text-2xl font-bold tracking-tight">Professional Subnet Calculator</h1>
+          <h2 className="text-xl font-semibold text-muted-foreground">
             Advanced IPv4/IPv6 Network Planning for Cloud Infrastructure
           </h2>
         </div>
         <div className="max-w-4xl mx-auto space-y-3">
-          <p className="text-lg text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Calculate, split, and manage network subnets for <strong>AWS VPC</strong>, <strong>Azure VNet</strong>, and <strong>Google Cloud VPC</strong>.
             Automatically handles cloud provider IP reservations and supports advanced subnet operations.
           </p>
@@ -940,11 +859,11 @@ export default function SubnetCalculator() {
       </div>
 
       {/* Side by side layout for Network Input and Subnet Information */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Network Input Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Network Configuration</CardTitle>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        {/* Network Input Card - 1/3 width */}
+        <Card className="rounded-lg shadow-md lg:col-span-1">
+          <CardHeader className="p-3 pb-2 sm:p-4 sm:pb-3 lg:p-6 lg:pb-4">
+            <CardTitle className="text-lg font-medium">Network Configuration</CardTitle>
             <CardDescription>
               {ipVersion === "ipv4"
                 ? "Configure your IPv4 network parameters with CIDR notation. Select cloud provider mode for automatic IP reservation handling in AWS VPC, Azure VNet, or Google Cloud VPC environments."
@@ -952,8 +871,8 @@ export default function SubnetCalculator() {
               }
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-4">
+          <CardContent className="p-3 sm:p-4 lg:p-6 space-y-4">
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="ipVersion">IP Version</Label>
                 <Select value={ipVersion} onValueChange={(value: IPVersion) => {
@@ -1038,17 +957,17 @@ export default function SubnetCalculator() {
               <div className="text-red-500 text-sm">{error}</div>
             )}
 
-            <Button onClick={calculateSubnet} className="w-full">
+            <Button onClick={calculateSubnet} className="w-full" size="lg">
               Calculate Subnet
             </Button>
           </CardContent>
         </Card>
 
-        {/* Subnet Information Card */}
+        {/* Subnet Information Card - 2/3 width */}
         {subnetInfo && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Calculated Network Details</CardTitle>
+          <Card className="rounded-lg shadow-md lg:col-span-2">
+            <CardHeader className="p-3 pb-2 sm:p-4 sm:pb-3 lg:p-6 lg:pb-4">
+              <CardTitle className="text-lg font-medium">Calculated Network Details</CardTitle>
               <CardDescription>
                 {(() => {
                   const cidrNum = parseInt(cidr);
@@ -1072,7 +991,7 @@ export default function SubnetCalculator() {
                 })()}
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 sm:p-4 lg:p-6">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1152,17 +1071,16 @@ export default function SubnetCalculator() {
 
       {/* Full-width sections below */}
       {subnetInfo && (
-        <>
-
+        <div className="space-y-4 sm:space-y-6">
           {subnetInfo.cloudReserved && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{subnetInfo.cloudReserved.provider} Reserved IP Addresses</CardTitle>
+            <Card className="rounded-lg shadow-md">
+              <CardHeader className="p-3 pb-2 sm:p-4 sm:pb-3 lg:p-6 lg:pb-4">
+                <CardTitle className="text-lg font-medium">{subnetInfo.cloudReserved.provider} Reserved IP Addresses</CardTitle>
                 <CardDescription>
                   {subnetInfo.cloudReserved.provider} automatically reserves these IP addresses in every subnet
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-3 sm:p-4 lg:p-6">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1187,10 +1105,10 @@ export default function SubnetCalculator() {
 
           {/* Advanced Subnet Management Section - Updated for Task 9.2 */}
           {shouldShowSubnetManagement && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>Advanced Network Operations</span>
+            <Card className="rounded-lg shadow-md">
+              <CardHeader className="p-3 pb-2 sm:p-4 sm:pb-3 lg:p-6 lg:pb-4">
+                <CardTitle className="text-lg font-medium flex items-center justify-between">
+                  <span>Subnet Management & Export</span>
                   {splitSubnets.length > 0 && (
                     <div className="flex items-center gap-4">
                       <span className="text-sm font-normal text-muted-foreground">
@@ -1206,6 +1124,7 @@ export default function SubnetCalculator() {
                         size="sm"
                         onClick={resetSubnetManagement}
                         disabled={isSubnetLoading}
+                        className="h-10 sm:h-8"
                       >
                         Reset All
                       </Button>
@@ -1213,12 +1132,12 @@ export default function SubnetCalculator() {
                   )}
                 </CardTitle>
                 <CardDescription>
-                  Perform advanced subnet operations including network splitting into smaller subnets and joining adjacent networks back together.
-                  Perfect for complex network design and CIDR block optimization.
-                  {mode !== "normal" && ` Cloud provider IP reservations for ${mode.toUpperCase()} are automatically calculated and applied to all operations.`}
+                  Split networks into smaller subnets, join adjacent subnets, and export configurations. 
+                  View your subnets in list or tree format, select the ones you need, and export them in various formats for documentation or infrastructure as code.
+                  {mode !== "normal" && ` Cloud provider IP reservations for ${mode.toUpperCase()} are automatically calculated and applied.`}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
                 <SubnetErrorBoundary
                   context="subnet-management"
                   onReset={resetSubnetManagement}
@@ -1233,39 +1152,35 @@ export default function SubnetCalculator() {
                     </Alert>
                   )}
 
-                  {/* Enhanced Loading State with Animation */}
-                  <AnimatedTransition isVisible={isSubnetLoading} type="fade">
-                    <PulseHighlight isActive={isSubnetLoading} color="primary">
-                      <Alert>
-                        <LoadingSpinner size="sm" message="Processing subnet operation..." />
-                        <AlertDescription className="ml-6">
-                          Please wait while we calculate your subnet configuration...
-                        </AlertDescription>
-                      </Alert>
-                    </PulseHighlight>
-                  </AnimatedTransition>
+                  {/* Loading State */}
+                  {isSubnetLoading && (
+                    <Alert>
+                      <LoadingSpinner size="sm" message="Processing subnet operation..." />
+                      <AlertDescription className="ml-6">
+                        Please wait while we calculate your subnet configuration...
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
-                  {/* Subnet Splitting Section with Loading Animation */}
+                  {/* Subnet Splitting Section */}
                   <div className="space-y-4">
-                    <AnimatedTransition isVisible={!isSubnetLoading} type="slide">
-                      {isSubnetLoading ? (
-                        <SubnetSplitterSkeleton />
-                      ) : (
-                        <SubnetSplitter
-                          parentSubnet={{
-                            ...subnetInfo,
-                            id: subnetInfo.network + subnetInfo.cidr,
-                            level: 0
-                          }}
-                          ipVersion={ipVersion}
-                          cloudMode={mode as CloudMode}
-                          onSplit={addSplitSubnets}
-                          onError={(error: SubnetError) => setSubnetError(error.message)}
-                          disabled={isSubnetLoading}
-                          maxSubnets={1000}
-                        />
-                      )}
-                    </AnimatedTransition>
+                    {isSubnetLoading ? (
+                      <SubnetSplitterSkeleton />
+                    ) : (
+                      <SubnetSplitter
+                        parentSubnet={{
+                          ...subnetInfo,
+                          id: subnetInfo.network + subnetInfo.cidr,
+                          level: 0
+                        }}
+                        ipVersion={ipVersion}
+                        cloudMode={mode as CloudMode}
+                        onSplit={addSplitSubnets}
+                        onError={(error: SubnetError) => setSubnetError(error.message)}
+                        disabled={isSubnetLoading}
+                        maxSubnets={1000}
+                      />
+                    )}
                   </div>
 
                   {/* Subnet Management Controls - Only show when subnets exist */}
@@ -1273,32 +1188,30 @@ export default function SubnetCalculator() {
                     <>
                       {/* Subnet Joining Section */}
                       <div className="space-y-4">
-                        <AnimatedTransition isVisible={!isSubnetLoading} type="slide">
-                          {isSubnetLoading ? (
-                            <SubnetJoinerSkeleton />
-                          ) : (
-                            <SubnetJoiner
-                              availableSubnets={splitSubnets}
-                              selectedSubnets={selectedSubnets}
-                              ipVersion={ipVersion}
-                              onSelectionChange={setSelectedSubnets}
-                              onJoin={(joinedSubnet, operation) => {
-                                // Remove the joined subnets from the list
-                                const subnetIdsToRemove = operation.sourceSubnets;
-                                removeSubnets(subnetIdsToRemove, operation);
+                        {isSubnetLoading ? (
+                          <SubnetJoinerSkeleton />
+                        ) : (
+                          <SubnetJoiner
+                            availableSubnets={splitSubnets}
+                            selectedSubnets={selectedSubnets}
+                            ipVersion={ipVersion}
+                            onSelectionChange={setSelectedSubnets}
+                            onJoin={(joinedSubnet, operation) => {
+                              // Remove the joined subnets from the list
+                              const subnetIdsToRemove = operation.sourceSubnets;
+                              removeSubnets(subnetIdsToRemove, operation);
 
-                                // Add the new joined subnet
-                                addSplitSubnets([joinedSubnet], {
-                                  ...operation,
-                                  type: 'join',
-                                  resultSubnets: [joinedSubnet]
-                                });
-                              }}
-                              onError={(error: SubnetError) => setSubnetError(error.message)}
-                              disabled={isSubnetLoading}
-                            />
-                          )}
-                        </AnimatedTransition>
+                              // Add the new joined subnet
+                              addSplitSubnets([joinedSubnet], {
+                                ...operation,
+                                type: 'join',
+                                resultSubnets: [joinedSubnet]
+                              });
+                            }}
+                            onError={(error: SubnetError) => setSubnetError(error.message)}
+                            disabled={isSubnetLoading}
+                          />
+                        )}
                       </div>
 
                       {/* View Toggle */}
@@ -1310,7 +1223,7 @@ export default function SubnetCalculator() {
                               variant={currentView === 'list' ? 'default' : 'ghost'}
                               size="sm"
                               onClick={() => setCurrentView('list')}
-                              className="rounded-r-none"
+                              className="rounded-r-none h-10 sm:h-8"
                             >
                               List
                             </Button>
@@ -1318,7 +1231,7 @@ export default function SubnetCalculator() {
                               variant={currentView === 'tree' ? 'default' : 'ghost'}
                               size="sm"
                               onClick={() => setCurrentView('tree')}
-                              className="rounded-l-none"
+                              className="rounded-l-none h-10 sm:h-8"
                             >
                               Tree
                             </Button>
@@ -1332,6 +1245,7 @@ export default function SubnetCalculator() {
                               variant="outline"
                               size="sm"
                               onClick={clearSubnetSelection}
+                              className="h-10 sm:h-8"
                             >
                               Clear Selection
                             </Button>
@@ -1340,15 +1254,17 @@ export default function SubnetCalculator() {
                             variant="outline"
                             size="sm"
                             onClick={selectAllSubnets}
+                            className="h-10 sm:h-8"
                           >
                             Select All
                           </Button>
                         </div>
                       </div>
 
-                      {/* Subnet Display - List or Tree View with Smooth Transitions */}
-                      <AnimatedTransition isVisible={splitSubnets.length > 0} type="fade" duration="slow">
-                        <PulseHighlight isActive={splitSubnets.length > 0 && !isSubnetLoading} color="success">
+                      {/* Unified Subnet Display and Export - Side by Side Layout */}
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+                        {/* Subnet List/Tree View - Takes up 2/3 of the width */}
+                        <div className="lg:col-span-2">
                           {currentView === 'list' ? (
                             isSubnetLoading ? (
                               <SubnetListSkeleton />
@@ -1418,23 +1334,25 @@ Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
                               />
                             )
                           )}
-                        </PulseHighlight>
-                      </AnimatedTransition>
+                        </div>
 
-                      {/* Export Section */}
-                      <div className="pt-4 border-t">
-                        <SubnetExport
-                          subnets={splitSubnets}
-                          selectedSubnets={selectedSubnets}
-                          onExport={(result) => {
-                            // Optional: Add success feedback or logging
-                            console.log('Export completed:', result.filename, result.size, 'bytes');
-                          }}
-                          onError={(error) => {
-                            setSubnetError(error.message);
-                          }}
-                          availableFormats={['text', 'csv', 'json']}
-                        />
+                        {/* Export Panel - Takes up 1/3 of the width */}
+                        <div className="lg:col-span-1">
+                          <div className="sticky top-6">
+                            <SubnetExport
+                              subnets={splitSubnets}
+                              selectedSubnets={selectedSubnets}
+                              onExport={(result) => {
+                                // Optional: Add success feedback or logging
+                                console.log('Export completed:', result.filename, result.size, 'bytes');
+                              }}
+                              onError={(error) => {
+                                setSubnetError(error.message);
+                              }}
+                              availableFormats={['text', 'csv', 'json']}
+                            />
+                          </div>
+                        </div>
                       </div>
                     </>
                   )}
@@ -1445,14 +1363,14 @@ Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
 
           {/* IPv6 Notice */}
           {subnetInfo && ipVersion === "ipv6" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Advanced Subnet Management</CardTitle>
+            <Card className="rounded-lg shadow-md">
+              <CardHeader className="p-3 pb-2 sm:p-4 sm:pb-3 lg:p-6 lg:pb-4">
+                <CardTitle className="text-lg font-medium">Advanced Subnet Management</CardTitle>
                 <CardDescription>
                   IPv6 subnet management features are coming soon.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-3 sm:p-4 lg:p-6">
                 <Alert>
                   <Info className="h-4 w-4" />
                   <AlertDescription>
@@ -1463,7 +1381,7 @@ Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
               </CardContent>
             </Card>
           )}
-        </>
+        </div>
       )}
     </div>
   );

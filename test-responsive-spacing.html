@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Responsive Spacing Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Test styles to visualize spacing */
+        .test-card { background: #f3f4f6; border: 1px solid #d1d5db; }
+        .test-button { background: #3b82f6; color: white; }
+        .test-section { background: #fef3c7; border: 1px dashed #f59e0b; }
+    </style>
+</head>
+<body class="bg-gray-100 p-4">
+    <h1 class="text-2xl font-bold mb-6">Responsive Spacing Test</h1>
+    
+    <!-- Main container with responsive width constraint -->
+    <div class="min-h-screen max-w-[80vw] max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4 sm:space-y-6 lg:space-y-8">
+        
+        <!-- Test section spacing -->
+        <div class="test-section p-4 rounded">
+            <h2 class="text-lg font-medium mb-2">Section 1 - Responsive Section Spacing</h2>
+            <p>This section uses space-y-4 sm:space-y-6 lg:space-y-8</p>
+        </div>
+        
+        <div class="test-section p-4 rounded">
+            <h2 class="text-lg font-medium mb-2">Section 2</h2>
+            <p>Spacing between sections adapts to screen size</p>
+        </div>
+        
+        <!-- Grid with responsive gaps -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <!-- Card with responsive padding -->
+            <div class="test-card rounded-lg shadow-md">
+                <div class="p-3 pb-2 sm:p-4 sm:pb-3 lg:p-6 lg:pb-4">
+                    <h3 class="text-lg font-medium">Card Header</h3>
+                    <p class="text-sm text-gray-600">Responsive header padding: p-3 pb-2 sm:p-4 sm:pb-3 lg:p-6 lg:pb-4</p>
+                </div>
+                <div class="p-3 sm:p-4 lg:p-6 space-y-4">
+                    <p>Card content with responsive padding: p-3 sm:p-4 lg:p-6</p>
+                    
+                    <!-- Touch target test buttons -->
+                    <div class="flex gap-2 flex-wrap">
+                        <button class="test-button px-3 py-2 rounded h-10 sm:h-8">
+                            Touch Target Button (h-10 sm:h-8)
+                        </button>
+                        <button class="test-button px-4 py-2 rounded h-10">
+                            Default Button (h-10)
+                        </button>
+                        <button class="test-button px-6 py-2 rounded h-12">
+                            Large Button (h-12)
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="test-card rounded-lg shadow-md">
+                <div class="p-3 pb-2 sm:p-4 sm:pb-3 lg:p-6 lg:pb-4">
+                    <h3 class="text-lg font-medium">Second Card</h3>
+                    <p class="text-sm text-gray-600">Same responsive padding pattern</p>
+                </div>
+                <div class="p-3 sm:p-4 lg:p-6">
+                    <p>Content adapts to screen size</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Nested content with responsive spacing -->
+        <div class="test-card rounded-lg shadow-md">
+            <div class="p-3 pb-2 sm:p-4 sm:pb-3 lg:p-6 lg:pb-4">
+                <h3 class="text-lg font-medium">Nested Spacing Test</h3>
+            </div>
+            <div class="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+                <div class="space-y-4">
+                    <p>Inner content with responsive spacing</p>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+                        <div class="bg-white p-2 rounded">Item 1</div>
+                        <div class="bg-white p-2 rounded">Item 2</div>
+                        <div class="bg-white p-2 rounded">Item 3</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Viewport size indicator -->
+    <div class="fixed bottom-4 right-4 bg-black text-white px-3 py-2 rounded text-sm">
+        <span class="sm:hidden">XS (&lt;640px)</span>
+        <span class="hidden sm:inline lg:hidden">SM (640px+)</span>
+        <span class="hidden lg:inline">LG (1024px+)</span>
+    </div>
+</body>
+</html>

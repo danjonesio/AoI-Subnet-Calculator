@@ -652,8 +652,8 @@ const SubnetTree = memo<SubnetTreeProps>(({
 
   if (loading) {
     return (
-      <Card className={className}>
-        <CardContent className="flex items-center justify-center py-8">
+      <Card className={`${className} rounded-lg shadow-md`}>
+        <CardContent className="p-6 flex items-center justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin mr-2" />
           <span>Loading subnet hierarchy...</span>
         </CardContent>
@@ -663,8 +663,8 @@ const SubnetTree = memo<SubnetTreeProps>(({
 
   if (subnets.length === 0) {
     return (
-      <Card className={className}>
-        <CardContent className="text-center py-8 text-muted-foreground">
+      <Card className={`${className} rounded-lg shadow-md`}>
+        <CardContent className="p-6 text-center py-8 text-muted-foreground">
           <Network className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p>No subnets to display</p>
           <p className="text-sm mt-2">Split a subnet to see the hierarchy</p>
@@ -692,9 +692,9 @@ const SubnetTree = memo<SubnetTreeProps>(({
         {internalExpandedNodes.size > 0 && `${internalExpandedNodes.size} nodes expanded in tree view`}
       </div>
 
-      <Card className={className}>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+      <Card className={`${className} rounded-lg shadow-md`}>
+        <CardHeader className="p-6 pb-4">
+          <CardTitle className="text-lg font-medium flex items-center justify-between">
             <span id="subnet-tree-title">
               Subnet Hierarchy ({subnets.length} subnet{subnets.length !== 1 ? 's' : ''})
             </span>
@@ -721,7 +721,7 @@ const SubnetTree = memo<SubnetTreeProps>(({
             </div>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
         {/* Controls */}
         <div className="mb-4 space-y-3">
           {/* Search/Filter Input */}
@@ -850,7 +850,7 @@ const SubnetTree = memo<SubnetTreeProps>(({
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-background border rounded-lg p-6 max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
+                <h3 className="text-xl font-semibold flex items-center gap-2">
                   <Keyboard className="h-5 w-5" />
                   Keyboard Shortcuts
                 </h3>

@@ -378,8 +378,8 @@ const VirtualSubnetList = memo<VirtualSubnetListProps>(({
 
   if (loading) {
     return (
-      <Card className={className}>
-        <CardContent className="flex items-center justify-center py-8">
+      <Card className={`${className} rounded-lg shadow-md`}>
+        <CardContent className="p-6 flex items-center justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin mr-2" />
           <span>Loading subnets...</span>
         </CardContent>
@@ -389,8 +389,8 @@ const VirtualSubnetList = memo<VirtualSubnetListProps>(({
 
   if (subnets.length === 0) {
     return (
-      <Card className={className}>
-        <CardContent className="text-center py-8 text-muted-foreground">
+      <Card className={`${className} rounded-lg shadow-md`}>
+        <CardContent className="p-6 text-center py-8 text-muted-foreground">
           No subnets to display
         </CardContent>
       </Card>
@@ -398,9 +398,9 @@ const VirtualSubnetList = memo<VirtualSubnetListProps>(({
   }
 
   return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
+    <Card className={`${className} rounded-lg shadow-md`}>
+      <CardHeader className="p-6 pb-4">
+        <CardTitle className="text-lg font-medium flex items-center justify-between">
           <span>
             Subnet List ({subnets.length} subnets)
             {shouldVirtualize && (
@@ -416,7 +416,7 @@ const VirtualSubnetList = memo<VirtualSubnetListProps>(({
           )}
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-6">
         {/* Search/Filter Input */}
         <div className="mb-4 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -473,7 +473,7 @@ const VirtualSubnetList = memo<VirtualSubnetListProps>(({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-auto p-0 font-semibold hover:bg-transparent"
+                    className="h-auto p-0 hover:bg-transparent"
                     onClick={() => handleSort('network')}
                   >
                     Network
@@ -484,7 +484,7 @@ const VirtualSubnetList = memo<VirtualSubnetListProps>(({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-auto p-0 font-semibold hover:bg-transparent"
+                    className="h-auto p-0 hover:bg-transparent"
                     onClick={() => handleSort('cidr')}
                   >
                     CIDR
@@ -495,7 +495,7 @@ const VirtualSubnetList = memo<VirtualSubnetListProps>(({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-auto p-0 font-semibold hover:bg-transparent"
+                    className="h-auto p-0 hover:bg-transparent"
                     onClick={() => handleSort('usableHosts')}
                   >
                     Usable Hosts
@@ -506,7 +506,7 @@ const VirtualSubnetList = memo<VirtualSubnetListProps>(({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-auto p-0 font-semibold hover:bg-transparent"
+                    className="h-auto p-0 hover:bg-transparent"
                     onClick={() => handleSort('firstHost')}
                   >
                     First Host
@@ -517,7 +517,7 @@ const VirtualSubnetList = memo<VirtualSubnetListProps>(({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-auto p-0 font-semibold hover:bg-transparent"
+                    className="h-auto p-0 hover:bg-transparent"
                     onClick={() => handleSort('lastHost')}
                   >
                     Last Host
