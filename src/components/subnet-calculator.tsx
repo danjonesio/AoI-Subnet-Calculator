@@ -1383,6 +1383,24 @@ Usable Hosts: ${subnet.usableHosts.toLocaleString()}`;
           )}
         </div>
       )}
+
+      {/* Footer */}
+      <footer className="mt-12 pt-8 border-t border-border text-center space-y-2">
+        <div className="text-sm text-muted-foreground">
+          <a 
+            href="https://artofinfra.com" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-primary hover:text-primary/80 hover:underline font-medium"
+          >
+            Art of Infra
+          </a>
+          {' - Subnet Calculator by Dan Jones - 2025'}
+        </div>
+        <div className="text-xs text-muted-foreground italic">
+          No network engineers were harmed during the making of this
+        </div>
+      </footer>
     </div>
   );
 }
