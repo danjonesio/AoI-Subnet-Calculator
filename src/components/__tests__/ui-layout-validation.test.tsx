@@ -19,7 +19,7 @@ import '@testing-library/jest-dom';
 // Mock Next.js Image component
 jest.mock('next/image', () => ({
   __esModule: true,
-  default: ({ src, alt, ...props }: any) => <img src={src} alt={alt} {...props} />,
+  default: ({ src, alt, ...props }: { src: string; alt: string; [key: string]: unknown }) => <img src={src} alt={alt} {...props} />,
 }));
 
 // Mock next-themes
@@ -33,8 +33,8 @@ jest.mock('next-themes', () => ({
 
 // Helper function to render component with theme provider
 const renderWithTheme = (theme: 'light' | 'dark' = 'light') => {
-  const { useTheme } = require('next-themes');
-  useTheme.mockReturnValue({
+  const mockUseTheme = jest.requireMock('next-themes').useTheme;
+  mockUseTheme.mockReturnValue({
     theme,
     setTheme: jest.fn(),
   });

@@ -281,7 +281,7 @@ export default function SubnetCalculator() {
         // For other operations (like join results), append to existing
         setSplitSubnets(prev => [...prev, ...newSubnets]);
       }
-      setSplitHistory(prev => [...prev, operation]);
+      // setSplitHistory(prev => [...prev, operation]); // Commented out as splitHistory state is not active
       setSubnetError(null);
     } catch (error) {
       setSubnetError(error instanceof Error ? error.message : 'Failed to add split subnets');
@@ -299,7 +299,7 @@ export default function SubnetCalculator() {
         subnetIds.forEach(id => newSelected.delete(id));
         return newSelected;
       });
-      setSplitHistory(prev => [...prev, operation]);
+      // setSplitHistory(prev => [...prev, operation]); // Commented out as splitHistory state is not active
       setSubnetError(null);
     } catch (error) {
       setSubnetError(error instanceof Error ? error.message : 'Failed to remove subnets');
